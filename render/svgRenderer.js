@@ -11,26 +11,30 @@ let currentAttackPosition = null;
 async function loadSprites() {
   try {
     // Load all SVG files
-    const [readyResponse, hitResponse, torchResponse] = await Promise.all([
+    const [readyResponse, hitResponse, torchResponse, runnerResponse] = await Promise.all([
       fetch('assets/sprites/cowboy-ready.svg'),
       fetch('assets/sprites/cowboy-hit.svg'),
-      fetch('assets/sprites/torch_attack.svg')
+      fetch('assets/sprites/torch_attack.svg'),
+      fetch('assets/sprites/runner_attack.svg')
     ]);
 
     const readyText = await readyResponse.text();
     const hitText = await hitResponse.text();
     const torchText = await torchResponse.text();
+    const runnerText = await runnerResponse.text();
 
     // Parse SVG content
     const parser = new DOMParser();
     const readyDoc = parser.parseFromString(readyText, 'image/svg+xml');
     const hitDoc = parser.parseFromString(hitText, 'image/svg+xml');
     const torchDoc = parser.parseFromString(torchText, 'image/svg+xml');
+    const runnerDoc = parser.parseFromString(runnerText, 'image/svg+xml');
 
     // Extract path content from each sprite group
     const readyGroups = readyDoc.querySelectorAll('g[*|label]');
     const hitGroups = hitDoc.querySelectorAll('g[*|label]');
     const torchGroups = torchDoc.querySelectorAll('g[*|label]');
+    const runnerGroups = runnerDoc.querySelectorAll('g[*|label]');
 
     // Map labels to position codes
     const labelMap = {
@@ -72,6 +76,21 @@ async function loadSprites() {
 
     // Inject torch attack sprites
     torchGroups.forEach(group => {
+      const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+      const targetId = label;
+      const targetElement = document.getElementById(targetId);
+      
+      if (targetElement) {
+        // Clone the path content
+        const paths = group.querySelectorAll('path');
+        paths.forEach(path => {
+          targetElement.appendChild(path.cloneNode(true));
+        });
+      }
+    });
+
+    // Inject runner attack sprites
+    runnerGroups.forEach(group => {
       const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
       const targetId = label;
       const targetElement = document.getElementById(targetId);
@@ -143,8 +162,20 @@ function clearDynamicElements() {
     setSVGVisibility(`torch_${side}_3`, false);
   });
 
+  // Hide all runner attack sprites
+  ['left', 'right'].forEach(side => {
+    setSVGVisibility(`runner_${side}_1`, false);
+    setSVGVisibility(`runner_${side}_2`, false);
+    setSVGVisibility(`runner_${side}_3`, false);
+    setSVGVisibility(`runner_${side}_4`, false);
+    setSVGVisibility(`climb_${side}_torso`, false);
+    setSVGVisibility(`climb_${side}_hand_1`, false);
+    setSVGVisibility(`climb_${side}_hand_2`, false);
+    setSVGVisibility(`runner_${side}_fall`, false);
+  });
+
   // Hide all players (both ready and hitting states)
-  ['TL', 'TR'].forEach(pos => {
+  ['TL', 'TR', 'BL', 'BR'].forEach(pos => {
     setSVGVisibility(`player_${pos}_ready`, false);
     setSVGVisibility(`player_${pos}_hit`, false);
   });
@@ -276,6 +307,54 @@ export function drawTorch(pos, stage) {
     setSVGVisibility(`torch_${side}_2`, true);
   } else if (stage === 5) {
     setSVGVisibility(`torch_${side}_3`, true);
+  }
+
+  updateAttackFlash();
+}
+
+/**
+ * Draw a runner attack at specified position and stage
+ * Stage 1-4: running animations
+ * Stage 5: climbing (torso + hand_1) - hittable
+ * Stage 6: climbing (torso + hand_2) - hittable, causes miss if not hit
+ * Stage 7: fall animation
+ */
+export function drawRunner(pos, stage, falling) {
+  // Determine side (BL uses left, BR uses right)
+  const side = pos === 'BL' ? 'left' : 'right';
+  
+  // Hide all runner attack sprites for this side first
+  setSVGVisibility(`runner_${side}_1`, false);
+  setSVGVisibility(`runner_${side}_2`, false);
+  setSVGVisibility(`runner_${side}_3`, false);
+  setSVGVisibility(`runner_${side}_4`, false);
+  setSVGVisibility(`climb_${side}_torso`, false);
+  setSVGVisibility(`climb_${side}_hand_1`, false);
+  setSVGVisibility(`climb_${side}_hand_2`, false);
+  setSVGVisibility(`runner_${side}_fall`, false);
+
+  // Show fall animation if falling
+  if (falling) {
+    setSVGVisibility(`runner_${side}_fall`, true);
+    updateAttackFlash();
+    return;
+  }
+
+  // Show the appropriate sprites based on stage
+  if (stage === 1) {
+    setSVGVisibility(`runner_${side}_1`, true);
+  } else if (stage === 2) {
+    setSVGVisibility(`runner_${side}_2`, true);
+  } else if (stage === 3) {
+    setSVGVisibility(`runner_${side}_3`, true);
+  } else if (stage === 4) {
+    setSVGVisibility(`runner_${side}_4`, true);
+  } else if (stage === 5) {
+    setSVGVisibility(`climb_${side}_torso`, true);
+    setSVGVisibility(`climb_${side}_hand_1`, true);
+  } else if (stage === 6) {
+    setSVGVisibility(`climb_${side}_torso`, true);
+    setSVGVisibility(`climb_${side}_hand_2`, true);
   }
 
   updateAttackFlash();

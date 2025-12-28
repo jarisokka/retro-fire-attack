@@ -19,7 +19,9 @@ export const GameState = {
 
   lanes: {
     TL: { type: "torch", stage: 0, timer: 0 },
-    TR: { type: "torch", stage: 0, timer: 0 }
+    TR: { type: "torch", stage: 0, timer: 0 },
+    BL: { type: "runner", stage: 0, timer: 0, falling: false },
+    BR: { type: "runner", stage: 0, timer: 0, falling: false }
   }
 };
 
@@ -28,12 +30,20 @@ const DIFFICULTY = {
   A: {
     initialTorchInterval: 180,  // Start slower (easier)
     minTorchInterval: 60,        // Minimum interval (fastest)
-    torchStageTime: 50           // Time per stage
+    torchStageTime: 50,          // Time per stage
+    initialRunnerInterval: 200,  // Runner spawn interval
+    minRunnerInterval: 80,
+    runnerStageTime: 45,         // Time per runner stage
+    fallTime: 30                 // Fall animation duration
   },
   B: {
     initialTorchInterval: 140,
     minTorchInterval: 45,
-    torchStageTime: 35
+    torchStageTime: 35,
+    initialRunnerInterval: 160,
+    minRunnerInterval: 60,
+    runnerStageTime: 32,
+    fallTime: 25
   }
 };
 
@@ -59,11 +69,15 @@ export function startGame(mode) {
   GameState.misses = 0;
   GameState.gameOver = false;
   GameState.totalHits = 0;
-  GameState.activeLanes = ['TL'];  // Start with only left side active
+  GameState.activeLanes = ['BL'];  // Start with bottom-left runner for testing
 
-  Object.values(GameState.lanes).forEach(l => {
-    l.stage = 0;
-    l.timer = 0;
+  Object.keys(GameState.lanes).forEach(key => {
+    const lane = GameState.lanes[key];
+    lane.stage = 0;
+    lane.timer = 0;
+    if (lane.type === "runner") {
+      lane.falling = false;
+    }
   });
 
   GameState.bonus[200] = false;
@@ -86,6 +100,16 @@ export function updateGame() {
 
     const mode = DIFFICULTY[GameState.gameMode];
 
+    // Handle falling animation for runners
+    if (lane.type === "runner" && lane.falling) {
+      if (lane.timer > mode.fallTime) {
+        lane.stage = 0;
+        lane.timer = 0;
+        lane.falling = false;
+      }
+      return;
+    }
+
     // Spawn - only in active lanes
     if (lane.stage === 0) {
       // Check if this lane is active
@@ -101,14 +125,28 @@ export function updateGame() {
       return;
     }
 
-    // Advance (5 stages for torch animation)
-    if (lane.timer > mode.torchStageTime) {
-      lane.stage++;
-      lane.timer = 0;
+    // Advance stages based on type
+    if (lane.type === "torch") {
+      // Torch: 5 stages
+      if (lane.timer > mode.torchStageTime) {
+        lane.stage++;
+        lane.timer = 0;
 
-      if (lane.stage > 5) {
-        registerMiss();
-        lane.stage = 0;
+        if (lane.stage > 5) {
+          registerMiss();
+          lane.stage = 0;
+        }
+      }
+    } else if (lane.type === "runner") {
+      // Runner: 6 stages (stage 5 and 6 are hittable, stage 7 causes miss)
+      if (lane.timer > mode.runnerStageTime) {
+        lane.stage++;
+        lane.timer = 0;
+
+        if (lane.stage > 6) {
+          registerMiss();
+          lane.stage = 0;
+        }
       }
     }
   });
@@ -131,21 +169,47 @@ export function attack() {
   const pos = GameState.currentPosition;
   const lane = GameState.lanes[pos];
 
-  // Only allow hitting at stage 5 (the final torch position)
-  if (lane && lane.stage === 5) {
-    lane.stage = 0;
+  if (!lane) return false;
+
+  // Runner: Allow hitting at stage 5 or 6 (climbing stages)
+  if (lane.type === "runner" && (lane.stage === 5 || lane.stage === 6)) {
+    // Trigger fall animation
+    lane.falling = true;
+    lane.stage = 7; // Fall stage
     lane.timer = 0;
     GameState.score += 2;
     GameState.totalHits++;
     
-    // Unlock second lane after first hit
+    // Unlock BR after first runner hit
     if (GameState.totalHits === 1 && GameState.activeLanes.length === 1) {
-      GameState.activeLanes = ['TL', 'TR'];
+      GameState.activeLanes = ['BL', 'BR'];
+    }
+    
+    // Unlock torches after 5 runner hits
+    if (GameState.totalHits === 5 && GameState.activeLanes.length === 2) {
+      GameState.activeLanes = ['BL', 'BR', 'TL'];
     }
     
     checkBonus();
     return true; // hit
   }
+
+  // Torch: Only allow hitting at stage 5
+  if (lane.type === "torch" && lane.stage === 5) {
+    lane.stage = 0;
+    lane.timer = 0;
+    GameState.score += 2;
+    GameState.totalHits++;
+    
+    // Unlock TR after first torch hit
+    if (GameState.activeLanes.length === 3 && !GameState.activeLanes.includes('TR')) {
+      GameState.activeLanes = ['BL', 'BR', 'TL', 'TR'];
+    }
+    
+    checkBonus();
+    return true; // hit
+  }
+
   return false;
 }
 
