@@ -6,9 +6,81 @@ let attackAnimationTimer = 0;
 let currentAttackPosition = null;
 
 /**
+ * Load external SVG sprites and inject into DOM
+ */
+async function loadSprites() {
+  try {
+    // Load both SVG files
+    const [readyResponse, hitResponse] = await Promise.all([
+      fetch('assets/sprites/cowboy-ready.svg'),
+      fetch('assets/sprites/cowboy-hit.svg')
+    ]);
+
+    const readyText = await readyResponse.text();
+    const hitText = await hitResponse.text();
+
+    // Parse SVG content
+    const parser = new DOMParser();
+    const readyDoc = parser.parseFromString(readyText, 'image/svg+xml');
+    const hitDoc = parser.parseFromString(hitText, 'image/svg+xml');
+
+    // Extract path content from each sprite group
+    const readyGroups = readyDoc.querySelectorAll('g[*|label]');
+    const hitGroups = hitDoc.querySelectorAll('g[*|label]');
+
+    // Map labels to position codes
+    const labelMap = {
+      'player_TL_ready': 'TL', 'player_TR_ready': 'TR',
+      'player_BL_ready': 'BL', 'player_BR_ready': 'BR',
+      'player_TL_hit': 'TL', 'player_TR_hit': 'TR',
+      'player_BL_hit': 'BL', 'player_BR_hit': 'BR'
+    };
+
+    // Inject ready sprites
+    readyGroups.forEach(group => {
+      const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+      const targetId = label;
+      const targetElement = document.getElementById(targetId);
+      
+      if (targetElement) {
+        // Clone the path content
+        const paths = group.querySelectorAll('path');
+        paths.forEach(path => {
+          targetElement.appendChild(path.cloneNode(true));
+        });
+      }
+    });
+
+    // Inject hit sprites
+    hitGroups.forEach(group => {
+      const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+      const targetId = label;
+      const targetElement = document.getElementById(targetId);
+      
+      if (targetElement) {
+        // Clone the path content
+        const paths = group.querySelectorAll('path');
+        paths.forEach(path => {
+          targetElement.appendChild(path.cloneNode(true));
+        });
+      }
+    });
+
+    console.log('Sprites loaded successfully');
+    return true;
+  } catch (error) {
+    console.error('Failed to load sprites:', error);
+    return false;
+  }
+}
+
+/**
  * Initialize the SVG renderer
  */
-export function initSVG() {
+export async function initSVG() {
+  // Load sprites first
+  await loadSprites();
+  
   // SVG elements are already in the DOM, just verify they exist
   const svg = document.getElementById('lcdSVG');
   if (!svg) {

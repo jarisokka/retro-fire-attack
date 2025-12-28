@@ -23,8 +23,12 @@ import {
 
 import { Sound, unlockAudio } from "./audio/sound.js";
 
-// Initialize SVG renderer
-initSVG();
+// Initialize SVG renderer (async)
+let gameReady = false;
+initSVG().then(() => {
+  gameReady = true;
+  console.log('Game ready');
+});
 
 // --------------------
 // GAME LOOP
