@@ -4,7 +4,6 @@ import {
   drawStaticLayout,
   triggerAttack,
   drawTorch,
-  drawClimber,
   drawFires,
   drawGameOver,
   drawTitleScreen,
@@ -53,9 +52,6 @@ function draw() {
 
     drawTorch("TL", GameState.lanes.TL.stage);
     drawTorch("TR", GameState.lanes.TR.stage);
-
-    drawClimber("BL", GameState.lanes.BL.stage);
-    drawClimber("BR", GameState.lanes.BR.stage);
 
     drawFires(GameState.misses);
   }

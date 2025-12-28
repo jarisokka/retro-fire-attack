@@ -8,6 +8,8 @@ export const GameState = {
   score: 0,
   misses: 0,
   gameOver: false,
+  totalHits: 0,  // Track total successful hits for progression
+  activeLanes: ['TL'],  // Start with only one lane active
 
   bonus: {
     200: false,
@@ -17,27 +19,38 @@ export const GameState = {
 
   lanes: {
     TL: { type: "torch", stage: 0, timer: 0 },
-    TR: { type: "torch", stage: 0, timer: 0 },
-    BL: { type: "climber", stage: 0, timer: 0 },
-    BR: { type: "climber", stage: 0, timer: 0 }
+    TR: { type: "torch", stage: 0, timer: 0 }
   }
 };
 
 // Timing constants
 const DIFFICULTY = {
   A: {
-    torchInterval: 100,
-    torchStageTime: 34,
-    climberInterval: 160,
-    climberStageTime: 46
+    initialTorchInterval: 180,  // Start slower (easier)
+    minTorchInterval: 60,        // Minimum interval (fastest)
+    torchStageTime: 50           // Time per stage
   },
   B: {
-    torchInterval: 70,
-    torchStageTime: 24,
-    climberInterval: 110,
-    climberStageTime: 32
+    initialTorchInterval: 140,
+    minTorchInterval: 45,
+    torchStageTime: 35
   }
 };
+
+// Calculate current difficulty based on score
+function getCurrentInterval(mode) {
+  const config = DIFFICULTY[mode];
+  const hits = GameState.totalHits;
+  
+  // Gradually decrease interval every 5 hits
+  const reduction = Math.floor(hits / 5) * 10;
+  const currentInterval = Math.max(
+    config.minTorchInterval,
+    config.initialTorchInterval - reduction
+  );
+  
+  return currentInterval;
+}
 
 export function startGame(mode) {
   GameState.gameMode = mode;
@@ -45,6 +58,8 @@ export function startGame(mode) {
   GameState.score = 0;
   GameState.misses = 0;
   GameState.gameOver = false;
+  GameState.totalHits = 0;
+  GameState.activeLanes = ['TL'];  // Start with only left side active
 
   Object.values(GameState.lanes).forEach(l => {
     l.stage = 0;
@@ -65,37 +80,33 @@ export function returnToTitle() {
 export function updateGame() {
   if (GameState.gameOver) return;
 
-  Object.values(GameState.lanes).forEach((lane) => {
+  Object.keys(GameState.lanes).forEach((laneKey) => {
+    const lane = GameState.lanes[laneKey];
     lane.timer++;
 
     const mode = DIFFICULTY[GameState.gameMode];
 
-    // Spawn
+    // Spawn - only in active lanes
     if (lane.stage === 0) {
-        const interval =
-            lane.type === "torch"
-                ? mode.torchInterval
-                : mode.climberInterval;
-
-
-      if (lane.timer > interval && Math.random() < 0.5) {
+      // Check if this lane is active
+      if (!GameState.activeLanes.includes(laneKey)) {
+        return;  // Skip inactive lanes
+      }
+      
+      const currentInterval = getCurrentInterval(GameState.gameMode);
+      if (lane.timer > currentInterval && Math.random() < 0.5) {
         lane.stage = 1;
         lane.timer = 0;
       }
       return;
     }
 
-    // Advance
-    const stageTime =
-        lane.type === "torch"
-            ? mode.torchStageTime
-            : mode.climberStageTime;
-
-    if (lane.timer > stageTime) {
+    // Advance (5 stages for torch animation)
+    if (lane.timer > mode.torchStageTime) {
       lane.stage++;
       lane.timer = 0;
 
-      if (lane.stage > 3) {
+      if (lane.stage > 5) {
         registerMiss();
         lane.stage = 0;
       }
@@ -120,10 +131,18 @@ export function attack() {
   const pos = GameState.currentPosition;
   const lane = GameState.lanes[pos];
 
-  if (lane && lane.stage > 0) {
+  // Only allow hitting at stage 5 (the final torch position)
+  if (lane && lane.stage === 5) {
     lane.stage = 0;
     lane.timer = 0;
     GameState.score += 2;
+    GameState.totalHits++;
+    
+    // Unlock second lane after first hit
+    if (GameState.totalHits === 1 && GameState.activeLanes.length === 1) {
+      GameState.activeLanes = ['TL', 'TR'];
+    }
+    
     checkBonus();
     return true; // hit
   }

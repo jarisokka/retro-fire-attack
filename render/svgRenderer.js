@@ -10,23 +10,27 @@ let currentAttackPosition = null;
  */
 async function loadSprites() {
   try {
-    // Load both SVG files
-    const [readyResponse, hitResponse] = await Promise.all([
+    // Load all SVG files
+    const [readyResponse, hitResponse, torchResponse] = await Promise.all([
       fetch('assets/sprites/cowboy-ready.svg'),
-      fetch('assets/sprites/cowboy-hit.svg')
+      fetch('assets/sprites/cowboy-hit.svg'),
+      fetch('assets/sprites/torch_attack.svg')
     ]);
 
     const readyText = await readyResponse.text();
     const hitText = await hitResponse.text();
+    const torchText = await torchResponse.text();
 
     // Parse SVG content
     const parser = new DOMParser();
     const readyDoc = parser.parseFromString(readyText, 'image/svg+xml');
     const hitDoc = parser.parseFromString(hitText, 'image/svg+xml');
+    const torchDoc = parser.parseFromString(torchText, 'image/svg+xml');
 
     // Extract path content from each sprite group
     const readyGroups = readyDoc.querySelectorAll('g[*|label]');
     const hitGroups = hitDoc.querySelectorAll('g[*|label]');
+    const torchGroups = torchDoc.querySelectorAll('g[*|label]');
 
     // Map labels to position codes
     const labelMap = {
@@ -53,6 +57,21 @@ async function loadSprites() {
 
     // Inject hit sprites
     hitGroups.forEach(group => {
+      const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+      const targetId = label;
+      const targetElement = document.getElementById(targetId);
+      
+      if (targetElement) {
+        // Clone the path content
+        const paths = group.querySelectorAll('path');
+        paths.forEach(path => {
+          targetElement.appendChild(path.cloneNode(true));
+        });
+      }
+    });
+
+    // Inject torch attack sprites
+    torchGroups.forEach(group => {
       const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
       const targetId = label;
       const targetElement = document.getElementById(targetId);
@@ -114,21 +133,19 @@ function setSVGText(id, text) {
  * Clear all dynamic elements (hide everything except background)
  */
 function clearDynamicElements() {
-  // Hide all torches
-  for (let stage = 1; stage <= 3; stage++) {
-    setSVGVisibility(`torch_TL_${stage}`, false);
-    setSVGVisibility(`torch_TR_${stage}`, false);
-  }
-
-  // Hide all climbers
-  for (let stage = 1; stage <= 3; stage++) {
-    setSVGVisibility(`climber_BL_${stage}`, false);
-    setSVGVisibility(`climber_BR_${stage}`, false);
-  }
+  // Hide all torch attack sprites (body + hands + torches)
+  ['left', 'right'].forEach(side => {
+    setSVGVisibility(`throw_${side}_body`, false);
+    setSVGVisibility(`throw_${side}_hand_1`, false);
+    setSVGVisibility(`throw_${side}_hand_2`, false);
+    setSVGVisibility(`torch_${side}_1`, false);
+    setSVGVisibility(`torch_${side}_2`, false);
+    setSVGVisibility(`torch_${side}_3`, false);
+  });
 
   // Hide all players (both ready and hitting states)
-  ['TL', 'TR', 'BL', 'BR'].forEach(pos => {
-    setSVGVisibility(`player_${pos}`, false);
+  ['TL', 'TR'].forEach(pos => {
+    setSVGVisibility(`player_${pos}_ready`, false);
     setSVGVisibility(`player_${pos}_hit`, false);
   });
 
@@ -227,34 +244,38 @@ function updateAttackFlash() {
 }
 
 /**
- * Draw a torch at specified position and stage
+ * Draw a torch attack at specified position and stage
+ * Stage 1: body + hand_1
+ * Stage 2: body + hand_2
+ * Stage 3: torch_1
+ * Stage 4: torch_2
+ * Stage 5: torch_3 (hittable)
  */
 export function drawTorch(pos, stage) {
-  // Hide all stages for this position first
-  for (let s = 1; s <= 3; s++) {
-    setSVGVisibility(`torch_${pos}_${s}`, false);
-  }
+  // Determine side (TL uses left, TR uses right)
+  const side = pos === 'TL' ? 'left' : 'right';
+  
+  // Hide all torch attack sprites for this side first
+  setSVGVisibility(`throw_${side}_body`, false);
+  setSVGVisibility(`throw_${side}_hand_1`, false);
+  setSVGVisibility(`throw_${side}_hand_2`, false);
+  setSVGVisibility(`torch_${side}_1`, false);
+  setSVGVisibility(`torch_${side}_2`, false);
+  setSVGVisibility(`torch_${side}_3`, false);
 
-  // Show the current stage if > 0
-  if (stage > 0 && stage <= 3) {
-    setSVGVisibility(`torch_${pos}_${stage}`, true);
-  }
-
-  updateAttackFlash();
-}
-
-/**
- * Draw a climber at specified position and stage
- */
-export function drawClimber(pos, stage) {
-  // Hide all stages for this position first
-  for (let s = 1; s <= 3; s++) {
-    setSVGVisibility(`climber_${pos}_${s}`, false);
-  }
-
-  // Show the current stage if > 0
-  if (stage > 0 && stage <= 3) {
-    setSVGVisibility(`climber_${pos}_${stage}`, true);
+  // Show the appropriate sprites based on stage
+  if (stage === 1) {
+    setSVGVisibility(`throw_${side}_body`, true);
+    setSVGVisibility(`throw_${side}_hand_1`, true);
+  } else if (stage === 2) {
+    setSVGVisibility(`throw_${side}_body`, true);
+    setSVGVisibility(`throw_${side}_hand_2`, true);
+  } else if (stage === 3) {
+    setSVGVisibility(`torch_${side}_1`, true);
+  } else if (stage === 4) {
+    setSVGVisibility(`torch_${side}_2`, true);
+  } else if (stage === 5) {
+    setSVGVisibility(`torch_${side}_3`, true);
   }
 
   updateAttackFlash();
@@ -298,10 +319,6 @@ export function render(gameState) {
     // Draw torches
     drawTorch('TL', gameState.lanes.TL.stage);
     drawTorch('TR', gameState.lanes.TR.stage);
-    
-    // Draw climbers
-    drawClimber('BL', gameState.lanes.BL.stage);
-    drawClimber('BR', gameState.lanes.BR.stage);
     
     // Draw fires
     drawFires(gameState.misses);

@@ -49,147 +49,29 @@
       <!-- -------------------- -->
       <!-- Torches (Top) - Flying Animation Frames -->
       <!-- -------------------- -->
-      <!-- Top-left torch - Frame 1: Mid-Air -->
-      <g id="torch_TL_1" visibility="hidden" transform="translate(70, 45) scale(0.4)">
-        <g transform="rotate(-30, 30, 30)">
-          <rect x="28" y="20" width="4" height="25" fill="black" />
-          <path d="M25 18 Q30 5 35 18 T25 18" fill="black" />
-        </g>
-      </g>
-      <!-- Top-left torch - Frame 2: Peak -->
-      <g id="torch_TL_2" visibility="hidden" transform="translate(75, 60) scale(0.4)">
-        <g transform="rotate(45, 30, 30)">
-          <rect x="28" y="20" width="4" height="25" fill="black" />
-          <path d="M25 18 Q30 5 35 18 T25 18" fill="black" />
-        </g>
-      </g>
-      <!-- Top-left torch - Frame 3: Close to Impact -->
-      <g id="torch_TL_3" visibility="hidden" transform="translate(80, 75) scale(0.4)">
-        <rect x="28" y="25" width="4" height="25" fill="black" />
-        <path d="M25 23 Q30 10 35 23 T25 23" fill="black" />
-      </g>
+      <!-- Top-left torch attack - Stage 1: Body + Hand 1 -->
+      <g id="throw_left_body" visibility="hidden" transform="translate(0, 38) scale(1.0)"></g>
+      <g id="throw_left_hand_1" visibility="hidden" transform="translate(0, 38) scale(1.0)"></g>
       
-      <!-- Top-right torch - Frame 1: Mid-Air -->
-      <g id="torch_TR_1" visibility="hidden" transform="translate(295, 45) scale(0.4)">
-        <g transform="rotate(-30, 30, 30)">
-          <rect x="28" y="20" width="4" height="25" fill="black" />
-          <path d="M25 18 Q30 5 35 18 T25 18" fill="black" />
-        </g>
-      </g>
-      <!-- Top-right torch - Frame 2: Peak -->
-      <g id="torch_TR_2" visibility="hidden" transform="translate(290, 60) scale(0.4)">
-        <g transform="rotate(45, 30, 30)">
-          <rect x="28" y="20" width="4" height="25" fill="black" />
-          <path d="M25 18 Q30 5 35 18 T25 18" fill="black" />
-        </g>
-      </g>
-      <!-- Top-right torch - Frame 3: Close to Impact -->
-      <g id="torch_TR_3" visibility="hidden" transform="translate(285, 75) scale(0.4)">
-        <rect x="28" y="25" width="4" height="25" fill="black" />
-        <path d="M25 23 Q30 10 35 23 T25 23" fill="black" />
-      </g>
-
-      <!-- -------------------- -->
-      <!-- Bottom Ladder Climbers (Attackers) -->
-      <!-- -------------------- -->
-      <!-- Bottom-left ladder -->
-      <g id="climber_BL_1" visibility="hidden" transform="translate(73, 165) scale(0.35)">
-        <g fill="black">
-          <rect x="55" y="15" width="10" height="10" />
-          <path d="M60 15 L62 2 L56 10 Z" />
-          <path d="M55 25 L40 50 L55 50 L65 25 Z" />
-          <path d="M45 50 L35 70 L45 70 Z" />
-          <path d="M50 50 L65 65 L75 60 Z" />
-          <rect x="35" y="35" width="15" height="5" />
-          <g transform="translate(25, 20) scale(0.8)">
-            <g transform="rotate(-70, 15, 15)">
-              <rect x="13" y="5" width="3" height="20" fill="black" />
-              <path d="M12 3 Q15 -3 18 3 T12 3" fill="black" />
-            </g>
-          </g>
-        </g>
-      </g>
-      <g id="climber_BL_2" visibility="hidden" transform="translate(78, 145) scale(0.35)">
-        <g fill="black">
-          <rect x="55" y="15" width="10" height="10" />
-          <path d="M60 15 L62 2 L56 10 Z" />
-          <path d="M55 25 L40 50 L55 50 L65 25 Z" />
-          <path d="M45 50 L35 70 L45 70 Z" />
-          <path d="M50 50 L65 65 L75 60 Z" />
-          <rect x="35" y="35" width="15" height="5" />
-          <g transform="translate(25, 20) scale(0.8)">
-            <g transform="rotate(-70, 15, 15)">
-              <rect x="13" y="5" width="3" height="20" fill="black" />
-              <path d="M12 3 Q15 -3 18 3 T12 3" fill="black" />
-            </g>
-          </g>
-        </g>
-      </g>
-      <g id="climber_BL_3" visibility="hidden" transform="translate(83, 125) scale(0.35)">
-        <g fill="black">
-          <rect x="55" y="15" width="10" height="10" />
-          <path d="M60 15 L62 2 L56 10 Z" />
-          <path d="M55 25 L40 50 L55 50 L65 25 Z" />
-          <path d="M45 50 L35 70 L45 70 Z" />
-          <path d="M50 50 L65 65 L75 60 Z" />
-          <rect x="35" y="35" width="15" height="5" />
-          <g transform="translate(25, 20) scale(0.8)">
-            <g transform="rotate(-70, 15, 15)">
-              <rect x="13" y="5" width="3" height="20" fill="black" />
-              <path d="M12 3 Q15 -3 18 3 T12 3" fill="black" />
-            </g>
-          </g>
-        </g>
-      </g>
-      <!-- Bottom-right ladder -->
-      <g id="climber_BR_1" visibility="hidden" transform="translate(213, 165) scale(0.35)">
-        <g fill="black">
-          <rect x="55" y="15" width="10" height="10" />
-          <path d="M60 15 L62 2 L56 10 Z" />
-          <path d="M55 25 L40 50 L55 50 L65 25 Z" />
-          <path d="M45 50 L35 70 L45 70 Z" />
-          <path d="M50 50 L65 65 L75 60 Z" />
-          <rect x="35" y="35" width="15" height="5" />
-          <g transform="translate(25, 20) scale(0.8)">
-            <g transform="rotate(-70, 15, 15)">
-              <rect x="13" y="5" width="3" height="20" fill="black" />
-              <path d="M12 3 Q15 -3 18 3 T12 3" fill="black" />
-            </g>
-          </g>
-        </g>
-      </g>
-      <g id="climber_BR_2" visibility="hidden" transform="translate(208, 145) scale(0.35)">
-        <g fill="black">
-          <rect x="55" y="15" width="10" height="10" />
-          <path d="M60 15 L62 2 L56 10 Z" />
-          <path d="M55 25 L40 50 L55 50 L65 25 Z" />
-          <path d="M45 50 L35 70 L45 70 Z" />
-          <path d="M50 50 L65 65 L75 60 Z" />
-          <rect x="35" y="35" width="15" height="5" />
-          <g transform="translate(25, 20) scale(0.8)">
-            <g transform="rotate(-70, 15, 15)">
-              <rect x="13" y="5" width="3" height="20" fill="black" />
-              <path d="M12 3 Q15 -3 18 3 T12 3" fill="black" />
-            </g>
-          </g>
-        </g>
-      </g>
-      <g id="climber_BR_3" visibility="hidden" transform="translate(203, 125) scale(0.35)">
-        <g fill="black">
-          <rect x="55" y="15" width="10" height="10" />
-          <path d="M60 15 L62 2 L56 10 Z" />
-          <path d="M55 25 L40 50 L55 50 L65 25 Z" />
-          <path d="M45 50 L35 70 L45 70 Z" />
-          <path d="M50 50 L65 65 L75 60 Z" />
-          <rect x="35" y="35" width="15" height="5" />
-          <g transform="translate(25, 20) scale(0.8)">
-            <g transform="rotate(-70, 15, 15)">
-              <rect x="13" y="5" width="3" height="20" fill="black" />
-              <path d="M12 3 Q15 -3 18 3 T12 3" fill="black" />
-            </g>
-          </g>
-        </g>
-      </g>
+      <!-- Top-left torch attack - Stage 2: Body + Hand 2 -->
+      <g id="throw_left_hand_2" visibility="hidden" transform="translate(0, 38) scale(1.0)"></g>
+      
+      <!-- Top-left torch attack - Stage 3-5: Torch in flight -->
+      <g id="torch_left_1" visibility="hidden" transform="translate(7, 35) scale(1.0)"></g>
+      <g id="torch_left_2" visibility="hidden" transform="translate(16, 23) scale(1.0)"></g>
+      <g id="torch_left_3" visibility="hidden" transform="translate(30, 13) scale(1.0)"></g>
+      
+      <!-- Top-right torch attack - Stage 1: Body + Hand 1 -->
+      <g id="throw_right_body" visibility="hidden" transform="translate(80, 38) scale(1.0)"></g>
+      <g id="throw_right_hand_1" visibility="hidden" transform="translate(80, 38) scale(1.0)"></g>
+      
+      <!-- Top-right torch attack - Stage 2: Body + Hand 2 -->
+      <g id="throw_right_hand_2" visibility="hidden" transform="translate(80, 38) scale(1.0)"></g>
+      
+      <!-- Top-right torch attack - Stage 3-5: Torch in flight -->
+      <g id="torch_right_1" visibility="hidden" transform="translate(73, 35) scale(1.0)"></g>
+      <g id="torch_right_2" visibility="hidden" transform="translate(64, 23) scale(1.0)"></g>
+      <g id="torch_right_3" visibility="hidden" transform="translate(45, 13) scale(1.0)"></g>
 
       <!-- -------------------- -->
       <!-- Player Firemen (Guards) - Ready States -->
