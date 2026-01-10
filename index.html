@@ -40,6 +40,13 @@
       visibility: hidden;
     }
 
+    /* 7-segment display styling */
+    .segment {
+      fill: #222;
+      stroke: #111;
+      stroke-width: 0.5;
+    }
+
     /* DEBUG: Force all characters visible in debug mode */
     body.debug-mode #lcdSVG g[id]:not(#titleScreen):not(#gameOverScreen) {
       visibility: visible !important;
@@ -116,17 +123,11 @@
       <g id="player_BR_hit" visibility="hidden" transform="translate(25, 5) scale(1.15)"></g>
 
       <!-- -------------------- -->
-      <!-- Miss / Fire Indicators (Flickering Flames) -->
+      <!-- Miss / Burn Indicators -->
       <!-- -------------------- -->
-      <g id="fire_1" visibility="hidden" transform="translate(160, 8) scale(0.35)">
-        <path d="M0 20 L5 0 L15 15 L20 -10 L25 15 L35 0 L40 20 Z" fill="black" />
-      </g>
-      <g id="fire_2" visibility="hidden" transform="translate(185, 8) scale(0.35)">
-        <path d="M0 20 L5 0 L15 15 L20 -10 L25 15 L35 0 L40 20 Z" fill="black" />
-      </g>
-      <g id="fire_3" visibility="hidden" transform="translate(210, 8) scale(0.35)">
-        <path d="M0 20 L5 0 L15 15 L20 -10 L25 15 L35 0 L40 20 Z" fill="black" />
-      </g>
+      <g id="burn1" visibility="hidden" transform="translate(30, 0) scale(1.15)"></g>
+      <g id="burn2" visibility="hidden" transform="translate(30, 0) scale(1.15)"></g>
+      <g id="burn3" visibility="hidden" transform="translate(30, 0) scale(1.15)"></g>
 
       <!-- -------------------- -->
       <!-- Title Screen Elements -->
@@ -147,9 +148,40 @@
       </g>
 
       <!-- -------------------- -->
-      <!-- Score Display -->
+      <!-- Score Display - 7-Segment Digits -->
       <!-- -------------------- -->
-      <text id="scoreText" x="350" y="30" font-family="monospace" font-size="16" fill="#222" text-anchor="end">0</text>
+      <g id="score-display" transform="translate(100, 15) scale(0.2) skewX(-12)">
+        <!-- Digit 0 (hundreds) -->
+        <g id="digit-0" transform="translate(0, 0)">
+          <polygon id="digit-0-A" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" visibility="hidden" />
+          <polygon id="digit-0-B" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 5)" visibility="hidden" />
+          <polygon id="digit-0-C" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 55)" visibility="hidden" />
+          <polygon id="digit-0-D" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 90)" visibility="hidden" />
+          <polygon id="digit-0-E" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 55)" visibility="hidden" />
+          <polygon id="digit-0-F" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 5)" visibility="hidden" />
+          <polygon id="digit-0-G" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 45)" visibility="hidden" />
+        </g>
+        <!-- Digit 1 (tens) -->
+        <g id="digit-1" transform="translate(80, 0)">
+          <polygon id="digit-1-A" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" visibility="hidden" />
+          <polygon id="digit-1-B" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 5)" visibility="hidden" />
+          <polygon id="digit-1-C" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 55)" visibility="hidden" />
+          <polygon id="digit-1-D" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 90)" visibility="hidden" />
+          <polygon id="digit-1-E" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 55)" visibility="hidden" />
+          <polygon id="digit-1-F" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 5)" visibility="hidden" />
+          <polygon id="digit-1-G" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 45)" visibility="hidden" />
+        </g>
+        <!-- Digit 2 (ones) -->
+        <g id="digit-2" transform="translate(160, 0)">
+          <polygon id="digit-2-A" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" visibility="hidden" />
+          <polygon id="digit-2-B" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 5)" visibility="hidden" />
+          <polygon id="digit-2-C" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 55)" visibility="hidden" />
+          <polygon id="digit-2-D" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 90)" visibility="hidden" />
+          <polygon id="digit-2-E" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 55)" visibility="hidden" />
+          <polygon id="digit-2-F" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 5)" visibility="hidden" />
+          <polygon id="digit-2-G" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 45)" visibility="hidden" />
+        </g>
+      </g>
     </svg>
   </div>
 

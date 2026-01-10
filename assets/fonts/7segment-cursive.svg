@@ -1,0 +1,44 @@
+<svg width="620" height="120" viewBox="0 0 620 120" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    /* You can change the color here from red (#FF0000) to anything else */
+    .segment { fill: #FF0000; stroke: #800000; stroke-width: 1; }
+  </style>
+
+  <defs>
+    <polygon id="h-seg" points="5,0 35,0 40,5 35,10 5,10 0,5" />
+    <polygon id="v-seg" points="0,5 10,5 10,35 5,40 0,35" />
+  </defs>
+
+  <g transform="skewX(-12) translate(20, 0)">
+
+      <g transform="translate(10, 10)">
+        <use href="#h-seg" x="5" y="0" /> <use href="#v-seg" x="40" y="5" /> <use href="#v-seg" x="40" y="55" /> <use href="#h-seg" x="5" y="90" /> <use href="#v-seg" x="0" y="55" /> <use href="#v-seg" x="0" y="5" /> </g>
+
+      <g transform="translate(70, 10)">
+        <use href="#v-seg" x="40" y="5" /> <use href="#v-seg" x="40" y="55" /> </g>
+
+      <g transform="translate(130, 10)">
+        <use href="#h-seg" x="5" y="0" /> <use href="#v-seg" x="40" y="5" /> <use href="#h-seg" x="5" y="45" /> <use href="#v-seg" x="0" y="55" /> <use href="#h-seg" x="5" y="90" /> </g>
+
+      <g transform="translate(190, 10)">
+        <use href="#h-seg" x="5" y="0" /> <use href="#v-seg" x="40" y="5" /> <use href="#h-seg" x="5" y="45" /> <use href="#v-seg" x="40" y="55" /> <use href="#h-seg" x="5" y="90" /> </g>
+
+      <g transform="translate(250, 10)">
+        <use href="#v-seg" x="0" y="5" /> <use href="#h-seg" x="5" y="45" /> <use href="#v-seg" x="40" y="5" /> <use href="#v-seg" x="40" y="55" /> </g>
+
+      <g transform="translate(310, 10)">
+        <use href="#h-seg" x="5" y="0" /> <use href="#v-seg" x="0" y="5" /> <use href="#h-seg" x="5" y="45" /> <use href="#v-seg" x="40" y="55" /> <use href="#h-seg" x="5" y="90" /> </g>
+
+      <g transform="translate(370, 10)">
+        <use href="#h-seg" x="5" y="0" /> <use href="#v-seg" x="0" y="5" /> <use href="#v-seg" x="0" y="55" /> <use href="#h-seg" x="5" y="90" /> <use href="#v-seg" x="40" y="55" /> <use href="#h-seg" x="5" y="45" /> </g>
+
+      <g transform="translate(430, 10)">
+        <use href="#h-seg" x="5" y="0" /> <use href="#v-seg" x="40" y="5" /> <use href="#v-seg" x="40" y="55" /> </g>
+
+      <g transform="translate(490, 10)">
+        <use href="#h-seg" x="5" y="0" /> <use href="#v-seg" x="40" y="5" /> <use href="#v-seg" x="40" y="55" /> <use href="#h-seg" x="5" y="90" /> <use href="#v-seg" x="0" y="55" /> <use href="#v-seg" x="0" y="5" /> <use href="#h-seg" x="5" y="45" /> </g>
+
+      <g transform="translate(550, 10)">
+        <use href="#h-seg" x="5" y="0" /> <use href="#v-seg" x="0" y="5" /> <use href="#v-seg" x="40" y="5" /> <use href="#h-seg" x="5" y="45" /> <use href="#v-seg" x="40" y="55" /> <use href="#h-seg" x="5" y="90" /> </g>
+  </g>
+</svg>

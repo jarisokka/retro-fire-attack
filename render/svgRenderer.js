@@ -11,17 +11,19 @@ let currentAttackPosition = null;
 async function loadSprites() {
   try {
     // Load all SVG files
-    const [readyResponse, hitResponse, torchResponse, runnerResponse] = await Promise.all([
+    const [readyResponse, hitResponse, torchResponse, runnerResponse, livesResponse] = await Promise.all([
       fetch('assets/sprites/cowboy-ready.svg'),
       fetch('assets/sprites/cowboy-hit.svg'),
       fetch('assets/sprites/torch_attack.svg'),
-      fetch('assets/sprites/runner_attack.svg')
+      fetch('assets/sprites/runner_attack.svg'),
+      fetch('assets/sprites/lives.svg')
     ]);
 
     const readyText = await readyResponse.text();
     const hitText = await hitResponse.text();
     const torchText = await torchResponse.text();
     const runnerText = await runnerResponse.text();
+    const livesText = await livesResponse.text();
 
     // Parse SVG content
     const parser = new DOMParser();
@@ -29,12 +31,14 @@ async function loadSprites() {
     const hitDoc = parser.parseFromString(hitText, 'image/svg+xml');
     const torchDoc = parser.parseFromString(torchText, 'image/svg+xml');
     const runnerDoc = parser.parseFromString(runnerText, 'image/svg+xml');
+    const livesDoc = parser.parseFromString(livesText, 'image/svg+xml');
 
     // Extract path content from each sprite group
     const readyGroups = readyDoc.querySelectorAll('g[*|label]');
     const hitGroups = hitDoc.querySelectorAll('g[*|label]');
     const torchGroups = torchDoc.querySelectorAll('g[*|label]');
     const runnerGroups = runnerDoc.querySelectorAll('g[*|label]');
+    const livesGroups = livesDoc.querySelectorAll('g[*|label]');
 
     // Map labels to position codes
     const labelMap = {
@@ -91,6 +95,21 @@ async function loadSprites() {
 
     // Inject runner attack sprites
     runnerGroups.forEach(group => {
+      const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+      const targetId = label;
+      const targetElement = document.getElementById(targetId);
+      
+      if (targetElement) {
+        // Clone the path content
+        const paths = group.querySelectorAll('path');
+        paths.forEach(path => {
+          targetElement.appendChild(path.cloneNode(true));
+        });
+      }
+    });
+
+    // Inject burn/lives indicators
+    livesGroups.forEach(group => {
       const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
       const targetId = label;
       const targetElement = document.getElementById(targetId);
@@ -361,12 +380,13 @@ export function drawRunner(pos, stage, falling) {
 }
 
 /**
- * Draw fire indicators based on number of misses
+ * Draw burn indicators based on number of misses
  */
 export function drawFires(misses) {
-  for (let i = 1; i <= 3; i++) {
-    setSVGVisibility(`fire_${i}`, i <= misses);
-  }
+  const burnIds = ['burn1', 'burn2', 'burn3'];
+  burnIds.forEach((id, index) => {
+    setSVGVisibility(id, index < misses);
+  });
 }
 
 /**
@@ -377,10 +397,52 @@ export function drawGameOver() {
 }
 
 /**
- * Draw score
+ * Draw score using 7-segment display
  */
+const SEGMENTS = {
+  0: ["A", "B", "C", "D", "E", "F"],
+  1: ["B", "C"],
+  2: ["A", "B", "G", "E", "D"],
+  3: ["A", "B", "G", "C", "D"],
+  4: ["F", "G", "B", "C"],
+  5: ["A", "F", "G", "C", "D"],
+  6: ["A", "F", "E", "D", "C", "G"],
+  7: ["A", "B", "C"],
+  8: ["A", "B", "C", "D", "E", "F", "G"],
+  9: ["A", "B", "C", "D", "F", "G"]
+};
+
 export function drawScore(score) {
-  setSVGText('scoreText', score.toString());
+  const padded = Math.min(score, 999).toString().padStart(3, "0");
+  
+  for (let i = 0; i < 3; i++) {
+    const digitGroup = document.getElementById(`digit-${i}`);
+    
+    // Hide digits that aren't needed yet
+    if ((i === 0 && score < 100) || (i === 1 && score < 10)) {
+      if (digitGroup) {
+        digitGroup.setAttribute('visibility', 'hidden');
+      }
+      continue;
+    }
+    
+    // Show the digit group
+    if (digitGroup) {
+      digitGroup.setAttribute('visibility', 'visible');
+    }
+    
+    const digit = parseInt(padded[i]);
+    const activeSegments = SEGMENTS[digit];
+    
+    // Update each segment (A-G) for this digit
+    ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach(segment => {
+      const segmentId = `digit-${i}-${segment}`;
+      const element = document.getElementById(segmentId);
+      if (element) {
+        element.setAttribute('visibility', activeSegments.includes(segment) ? 'visible' : 'hidden');
+      }
+    });
+  }
 }
 
 /**
