@@ -17,10 +17,6 @@
     }
 
     #lcdContainer {
-      background-image: url('assets/bacground/fire-attack-background.svg');
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
       border: 12px solid #444;
       border-radius: 8px;
       padding: 20px;
@@ -29,7 +25,10 @@
 
     #lcdSVG {
       display: block;
-      background: transparent; /* No overlay - show background clearly */
+      background-image: url('assets/bacground/background-bitmap2.png');
+      background-size: 400px 250px; /* Exact 1:1 match with SVG dimensions */
+      background-position: 0 0;
+      background-repeat: no-repeat;
     }
 
     canvas {
@@ -40,77 +39,81 @@
     #player-hit-layer svg g {
       visibility: hidden;
     }
+
+    /* DEBUG: Force all characters visible in debug mode */
+    body.debug-mode #lcdSVG g[id]:not(#titleScreen):not(#gameOverScreen) {
+      visibility: visible !important;
+    }
   </style>
 </head>
 <body>
   <!-- SVG LCD Display -->
   <div id="lcdContainer">
-    <svg id="lcdSVG" width="400" height="250" viewBox="0 -10 400 260">
+    <svg id="lcdSVG" width="400" height="250" viewBox="0 0 400 250">
       <!-- -------------------- -->
       <!-- Torches (Top) - Flying Animation Frames -->
       <!-- -------------------- -->
       <!-- Top-left torch attack - Stage 1: Body + Hand 1 -->
-      <g id="throw_left_body" visibility="hidden" transform="translate(0, 38) scale(1.0)"></g>
-      <g id="throw_left_hand_1" visibility="hidden" transform="translate(0, 38) scale(1.0)"></g>
+      <g id="throw_left_body" visibility="hidden" transform="translate(0, 10) scale(1.15)"></g>
+      <g id="throw_left_hand_1" visibility="hidden" transform="translate(0, 10) scale(1.15)"></g>
       
       <!-- Top-left torch attack - Stage 2: Body + Hand 2 -->
-      <g id="throw_left_hand_2" visibility="hidden" transform="translate(0, 38) scale(1.0)"></g>
+      <g id="throw_left_hand_2" visibility="hidden" transform="translate(0, 10) scale(1.15)"></g>
       
       <!-- Top-left torch attack - Stage 3-5: Torch in flight -->
-      <g id="torch_left_1" visibility="hidden" transform="translate(7, 35) scale(1.0)"></g>
-      <g id="torch_left_2" visibility="hidden" transform="translate(16, 23) scale(1.0)"></g>
-      <g id="torch_left_3" visibility="hidden" transform="translate(30, 13) scale(1.0)"></g>
+      <g id="torch_left_1" visibility="hidden" transform="translate(5, 5) scale(1.15)"></g>
+      <g id="torch_left_2" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="torch_left_3" visibility="hidden" transform="translate(15, -5) scale(1.15)"></g>
       
       <!-- Top-right torch attack - Stage 1: Body + Hand 1 -->
-      <g id="throw_right_body" visibility="hidden" transform="translate(80, 38) scale(1.0)"></g>
-      <g id="throw_right_hand_1" visibility="hidden" transform="translate(80, 38) scale(1.0)"></g>
+      <g id="throw_right_body" visibility="hidden" transform="translate(30, 10) scale(1.15)"></g>
+      <g id="throw_right_hand_1" visibility="hidden" transform="translate(30, 10) scale(1.15)"></g>
       
       <!-- Top-right torch attack - Stage 2: Body + Hand 2 -->
-      <g id="throw_right_hand_2" visibility="hidden" transform="translate(80, 38) scale(1.0)"></g>
+      <g id="throw_right_hand_2" visibility="hidden" transform="translate(30, 10) scale(1.15)"></g>
       
       <!-- Top-right torch attack - Stage 3-5: Torch in flight -->
-      <g id="torch_right_1" visibility="hidden" transform="translate(73, 35) scale(1.0)"></g>
-      <g id="torch_right_2" visibility="hidden" transform="translate(64, 23) scale(1.0)"></g>
-      <g id="torch_right_3" visibility="hidden" transform="translate(45, 13) scale(1.0)"></g>
+      <g id="torch_right_1" visibility="hidden" transform="translate(35, 5) scale(1.15)"></g>
+      <g id="torch_right_2" visibility="hidden" transform="translate(30, 0) scale(1.15)"></g>
+      <g id="torch_right_3" visibility="hidden" transform="translate(25, -5) scale(1.15)"></g>
 
       <!-- -------------------- -->
       <!-- Runner Attacks (Bottom) -->
       <!-- -------------------- -->
       <!-- Bottom-left runner attack -->
-      <g id="runner_left_1" visibility="hidden" transform="translate(-27, 60) scale(1.0)"></g>
-      <g id="runner_left_2" visibility="hidden" transform="translate(-6, 60) scale(1.0)"></g>
-      <g id="runner_left_3" visibility="hidden" transform="translate(10, 60) scale(1.0)"></g>
-      <g id="runner_left_4" visibility="hidden" transform="translate(15, 60) scale(1.0)"></g>
-      <g id="climb_left_torso" visibility="hidden" transform="translate(20, 38) scale(1.0)"></g>
-      <g id="climb_left_hand_1" visibility="hidden" transform="translate(20, 38) scale(1.0)"></g>
-      <g id="climb_left_hand_2" visibility="hidden" transform="translate(20, 38) scale(1.0)"></g>
-      <g id="runner_left_fall" visibility="hidden" transform="translate(15, 60) scale(1.0)"></g>
+      <g id="runner_left_1" visibility="hidden" transform="translate(-5, 10) scale(1.15)"></g>
+      <g id="runner_left_2" visibility="hidden" transform="translate(0, 10) scale(1.15)"></g>
+      <g id="runner_left_3" visibility="hidden" transform="translate(5, 10) scale(1.15)"></g>
+      <g id="runner_left_4" visibility="hidden" transform="translate(10, 10) scale(1.15)"></g>
+      <g id="climb_left_torso" visibility="hidden" transform="translate(10, 5) scale(1.15)"></g>
+      <g id="climb_left_hand_1" visibility="hidden" transform="translate(10, 5) scale(1.15)"></g>
+      <g id="climb_left_hand_2" visibility="hidden" transform="translate(10, 5) scale(1.15)"></g>
+      <g id="runner_left_fall" visibility="hidden" transform="translate(15, 10) scale(1.15)"></g>
       
       <!-- Bottom-right runner attack -->
-      <g id="runner_right_1" visibility="hidden" transform="translate(107, 60) scale(1.0)"></g>
-      <g id="runner_right_2" visibility="hidden" transform="translate(86, 60) scale(1.0)"></g>
-      <g id="runner_right_3" visibility="hidden" transform="translate(70, 60) scale(1.0)"></g>
-      <g id="runner_right_4" visibility="hidden" transform="translate(65, 60) scale(1.0)"></g>
-      <g id="climb_right_torso" visibility="hidden" transform="translate(60, 38) scale(1.0)"></g>
-      <g id="climb_right_hand_1" visibility="hidden" transform="translate(60, 38) scale(1.0)"></g>
-      <g id="climb_right_hand_2" visibility="hidden" transform="translate(60, 38) scale(1.0)"></g>
-      <g id="runner_right_fall" visibility="hidden" transform="translate(65, 60) scale(1.0)"></g>
-
+      <g id="runner_right_1" visibility="hidden" transform="translate(40 10) scale(1.15)"></g>
+      <g id="runner_right_2" visibility="hidden" transform="translate(35, 10) scale(1.15)"></g>
+      <g id="runner_right_3" visibility="hidden" transform="translate(30, 10) scale(1.15)"></g>
+      <g id="runner_right_4" visibility="hidden" transform="translate(25, 10) scale(1.15)"></g>
+      <g id="climb_right_torso" visibility="hidden" transform="translate(25, 5) scale(1.15)"></g>
+      <g id="climb_right_hand_1" visibility="hidden" transform="translate(25, 5) scale(1.15)"></g>
+      <g id="climb_right_hand_2" visibility="hidden" transform="translate(25, 5) scale(1.15)"></g>
+      <g id="runner_right_fall" visibility="hidden" transform="translate(20, 10) scale(1.15)"></g>
       <!-- -------------------- -->
       <!-- Player Firemen (Guards) - Ready States -->
       <!-- -------------------- -->
-      <g id="player_TL_ready" visibility="hidden" transform="translate(40, 14) scale(1.0)"></g>
-      <g id="player_TR_ready" visibility="hidden" transform="translate(40, 14) scale(1.0)"></g>
-      <g id="player_BL_ready" visibility="hidden" transform="translate(40, 35) scale(1.0)"></g>
-      <g id="player_BR_ready" visibility="hidden" transform="translate(40, 35) scale(1.0)"></g>
+      <g id="player_TL_ready" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="player_TR_ready" visibility="hidden" transform="translate(25, 0) scale(1.15)"></g>
+      <g id="player_BL_ready" visibility="hidden" transform="translate(10, 5) scale(1.15)"></g>
+      <g id="player_BR_ready" visibility="hidden" transform="translate(25, 5) scale(1.15)"></g>
 
       <!-- -------------------- -->
       <!-- Player Firemen (Guards) - Hitting/Action States -->
       <!-- -------------------- -->
-      <g id="player_TL_hit" visibility="hidden" transform="translate(40, 14) scale(1.0)"></g>
-      <g id="player_TR_hit" visibility="hidden" transform="translate(40, 14) scale(1.0)"></g>
-      <g id="player_BL_hit" visibility="hidden" transform="translate(40, 35) scale(1.0)"></g>
-      <g id="player_BR_hit" visibility="hidden" transform="translate(40, 35) scale(1.0)"></g>
+      <g id="player_TL_hit" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="player_TR_hit" visibility="hidden" transform="translate(25, 0) scale(1.15)"></g>
+      <g id="player_BL_hit" visibility="hidden" transform="translate(10, 5) scale(1.15)"></g>
+      <g id="player_BR_hit" visibility="hidden" transform="translate(25, 5) scale(1.15)"></g>
 
       <!-- -------------------- -->
       <!-- Miss / Fire Indicators (Flickering Flames) -->
@@ -152,7 +155,39 @@
 
   <canvas id="lcd" width="320" height="240"></canvas>
 
+  <!-- DEBUG: Show all characters button -->
+  <div style="position: fixed; top: 10px; left: 10px; z-index: 1000;">
+    <button id="debugToggle" style="padding: 10px 20px; font-size: 14px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px;">
+      Show All Characters
+    </button>
+  </div>
+
+  <script>
+    // DEBUG: Set up before game loads
+    window.DEBUG_MODE = false;
+  </script>
+
   <script type="module" src="main.js"></script>
+
+  <script>
+    // DEBUG: Toggle all characters visibility (after game loads)
+    const debugToggle = document.getElementById('debugToggle');
+    let debugMode = false;
+
+    debugToggle.addEventListener('click', () => {
+      debugMode = !debugMode;
+      window.DEBUG_MODE = debugMode;
+      
+      // Toggle debug class on body for CSS override
+      document.body.classList.toggle('debug-mode', debugMode);
+      
+      debugToggle.textContent = debugMode ? 'Hide All Characters' : 'Show All Characters';
+      debugToggle.style.background = debugMode ? '#f44336' : '#4CAF50';
+      
+      // Dispatch event for game to pause/resume
+      window.dispatchEvent(new CustomEvent('debugModeChanged', { detail: { enabled: debugMode } }));
+    });
+  </script>
 </body>
 </html>
 
