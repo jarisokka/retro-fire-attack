@@ -10,6 +10,9 @@ export const GameState = {
   gameOver: false,
   totalHits: 0,  // Track total successful hits for progression
   activeLanes: ['TL'],  // Start with only one lane active
+  missAnimationTriggered: false,  // Flag to trigger miss animation
+  torchMissAnimationTriggered: false,  // Flag to trigger torch miss animation
+  lastMissPosition: null,  // Track where miss occurred
 
   bonus: {
     200: false,
@@ -133,7 +136,7 @@ export function updateGame() {
         lane.timer = 0;
 
         if (lane.stage > 5) {
-          registerMiss();
+          registerMiss(laneKey);
           lane.stage = 0;
         }
       }
@@ -144,7 +147,7 @@ export function updateGame() {
         lane.timer = 0;
 
         if (lane.stage > 6) {
-          registerMiss();
+          registerMiss(laneKey);
           lane.stage = 0;
         }
       }
@@ -232,12 +235,32 @@ function checkBonus() {
 // --------------------
 // MISS / GAME OVER
 // --------------------
-function registerMiss() {
+function registerMiss(laneKey) {
+  console.log('Register miss called for lane:', laneKey);
   GameState.misses++;
+
+  // Trigger runner miss animation for BL and BR lanes
+  if (laneKey === 'BL' || laneKey === 'BR') {
+    console.log('Setting missAnimationTriggered for runner miss');
+    GameState.lastMissPosition = laneKey;
+    GameState.missAnimationTriggered = true;
+  }
+  
+  // Trigger torch miss animation for TL and TR lanes
+  if (laneKey === 'TL' || laneKey === 'TR') {
+    console.log('Setting torchMissAnimationTriggered for torch miss');
+    GameState.lastMissPosition = laneKey;
+    GameState.torchMissAnimationTriggered = true;
+  }
 
   if (GameState.misses >= 3) {
     GameState.gameOver = true;
     Sound.gameOver();
+    // Transition to GAMEOVER scene after a delay to let animation finish
+    // All miss animations are 5 seconds
+    setTimeout(() => {
+      GameState.scene = 'GAMEOVER';
+    }, 5000);
   }
 }
 

@@ -8,7 +8,12 @@ import {
   drawFires,
   drawGameOver,
   drawTitleScreen,
-  drawScore
+  drawScore,
+  startRunnerMissAnimation,
+  isMissAnimationActive,
+  startTorchMissAnimation,
+  isTorchMissAnimationActive,
+  render
 } from "./render/svgRenderer.js";
 
 import {
@@ -34,12 +39,31 @@ initSVG().then(() => {
 // GAME LOOP
 // --------------------
 setInterval(() => {
-  updateGame();
-  draw();
+  // Don't update game logic during miss animations
+  if (!isMissAnimationActive() && !isTorchMissAnimationActive()) {
+    updateGame();
+    
+    // Check if runner miss animation should be triggered
+    if (GameState.missAnimationTriggered && GameState.lastMissPosition) {
+      console.log('Triggering runner miss animation for position:', GameState.lastMissPosition);
+      startRunnerMissAnimation(GameState.lastMissPosition);
+      GameState.missAnimationTriggered = false;
+    }
+    
+    // Check if torch miss animation should be triggered
+    if (GameState.torchMissAnimationTriggered && GameState.lastMissPosition) {
+      console.log('Triggering torch miss animation for position:', GameState.lastMissPosition);
+      startTorchMissAnimation(GameState.lastMissPosition);
+      GameState.torchMissAnimationTriggered = false;
+    }
+  }
+  
+  // Always call render to update animations
+  render(GameState);
 }, 1000 / 60);
 
 // --------------------
-// DRAW
+// DRAW (no longer used, kept for reference)
 // --------------------
 function draw() {
   if (GameState.scene === "TITLE") {

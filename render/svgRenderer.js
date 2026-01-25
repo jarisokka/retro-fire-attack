@@ -13,20 +13,36 @@ const smokeAnimations = {
   TR: { active: false, frame: 0, timer: 0 }
 };
 
+// Miss animation state (runner)
+let missAnimationActive = false;
+let missAnimationTimer = 0;
+let missAnimationPosition = null; // Store where the miss occurred
+
+// Torch miss animation state
+let torchMissAnimationActive = false;
+let torchMissAnimationTimer = 0;
+let torchMissAnimationPosition = null; // TL or TR
+
+// Top fire animation state
+let topFireActive = false;
+let topFireTimer = 0;
+let topFireCycle = 0; // Track animation cycle
+
 /**
  * Load external SVG sprites and inject into DOM
  */
 async function loadSprites() {
   try {
     // Load all SVG files
-    const [readyResponse, hitResponse, torchResponse, runnerResponse, livesResponse, hitAnimationResponse, smokeAnimationResponse] = await Promise.all([
+    const [readyResponse, hitResponse, torchResponse, runnerResponse, livesResponse, hitAnimationResponse, smokeAnimationResponse, fireActionsResponse] = await Promise.all([
       fetch('assets/sprites/cowboy-ready.svg'),
       fetch('assets/sprites/cowboy-hit.svg'),
       fetch('assets/sprites/torch_attack.svg'),
       fetch('assets/sprites/runner_attack.svg'),
       fetch('assets/sprites/lives.svg'),
       fetch('assets/sprites/hit-animation.svg'),
-      fetch('assets/sprites/smoke-animation.svg')
+      fetch('assets/sprites/smoke-animation.svg'),
+      fetch('assets/sprites/fire-actions.svg')
     ]);
 
     const readyText = await readyResponse.text();
@@ -36,6 +52,7 @@ async function loadSprites() {
     const livesText = await livesResponse.text();
     const hitAnimationText = await hitAnimationResponse.text();
     const smokeAnimationText = await smokeAnimationResponse.text();
+    const fireActionsText = await fireActionsResponse.text();
 
     // Parse SVG content
     const parser = new DOMParser();
@@ -46,6 +63,7 @@ async function loadSprites() {
     const livesDoc = parser.parseFromString(livesText, 'image/svg+xml');
     const hitAnimationDoc = parser.parseFromString(hitAnimationText, 'image/svg+xml');
     const smokeAnimationDoc = parser.parseFromString(smokeAnimationText, 'image/svg+xml');
+    const fireActionsDoc = parser.parseFromString(fireActionsText, 'image/svg+xml');
 
     // Extract path content from each sprite group
     const readyGroups = readyDoc.querySelectorAll('g[*|label]');
@@ -55,6 +73,7 @@ async function loadSprites() {
     const livesGroups = livesDoc.querySelectorAll('g[*|label]');
     const hitAnimationGroups = hitAnimationDoc.querySelectorAll('g[*|label]');
     const smokeAnimationGroups = smokeAnimationDoc.querySelectorAll('g[*|label]');
+    const fireActionsGroups = fireActionsDoc.querySelectorAll('g[*|label]');
 
     // Map labels to position codes
     const labelMap = {
@@ -204,6 +223,56 @@ async function loadSprites() {
       }
     });
 
+    // Inject fire-actions sprites
+    fireActionsGroups.forEach(group => {
+      const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+      console.log('Fire actions group label:', label);
+      
+      // Handle top_fire group (contains fire1-6 sub-groups)
+      if (label === 'top_fire') {
+        const subGroups = group.querySelectorAll('g[*|label]');
+        subGroups.forEach(subGroup => {
+          const subLabel = subGroup.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+          const targetElement = document.getElementById(subLabel);
+          if (targetElement) {
+            const paths = subGroup.querySelectorAll('path');
+            paths.forEach(path => {
+              targetElement.appendChild(path.cloneNode(true));
+            });
+          }
+        });
+      }
+      
+      // Handle roof_fire group (contains roof_fire_center, left, right as direct paths)
+      if (label === 'roof_fire') {
+        // Look for direct path elements with inkscape:label attributes
+        const paths = group.querySelectorAll('path[*|label]');
+        console.log('Found roof_fire paths:', paths.length);
+        paths.forEach(path => {
+          const pathLabel = path.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+          console.log('Roof fire path label:', pathLabel);
+          const targetElement = document.getElementById(pathLabel);
+          if (targetElement) {
+            targetElement.appendChild(path.cloneNode(true));
+            console.log('Injected', pathLabel, 'into DOM');
+          } else {
+            console.log('Target element not found for:', pathLabel);
+          }
+        });
+      }
+      
+      // Handle direct sprite elements (player_on_fire, step_on_fire)
+      if (label === 'player_on_fire' || label === 'step_on_fire') {
+        const targetElement = document.getElementById(label);
+        if (targetElement) {
+          const paths = group.querySelectorAll('path');
+          paths.forEach(path => {
+            targetElement.appendChild(path.cloneNode(true));
+          });
+        }
+      }
+    });
+
     console.log('Sprites loaded successfully');
     return true;
   } catch (error) {
@@ -289,6 +358,16 @@ function clearDynamicElements() {
     }
   });
 
+  // Hide miss animation elements
+  for (let i = 1; i <= 6; i++) {
+    setSVGVisibility(`fire${i}`, false);
+  }
+  setSVGVisibility('roof_fire_center', false);
+  setSVGVisibility('roof_fire_left', false);
+  setSVGVisibility('roof_fire_right', false);
+  setSVGVisibility('player_on_fire', false);
+  setSVGVisibility('step_on_fire', false);
+
   // Hide fires
   for (let i = 1; i <= 3; i++) {
     setSVGVisibility(`fire_${i}`, false);
@@ -316,13 +395,21 @@ export function drawTitleScreen(mode) {
 /**
  * Draw static layout with player position
  */
-export function drawStaticLayout(playerPosition) {
+export function drawStaticLayout(playerPosition, gameState = null) {
   clearDynamicElements();
   setSVGVisibility('titleScreen', false);
   setSVGVisibility('gameOverScreen', false);
 
   // Show the player at current position
-  drawPlayer(playerPosition);
+  // Hide player only if game over AND miss animation is past frame 50
+  // This ensures player is visible during first 50 frames of 3rd miss animation
+  const shouldHidePlayer = gameState && gameState.gameOver && 
+                           ((missAnimationActive && missAnimationTimer > 50) ||
+                            (torchMissAnimationActive && torchMissAnimationTimer > 50));
+  
+  if (!shouldHidePlayer) {
+    drawPlayer(playerPosition);
+  }
 }
 
 /**
@@ -334,6 +421,13 @@ function drawPlayer(position) {
     setSVGVisibility(`player_${pos}_ready`, false);
     setSVGVisibility(`player_${pos}_hit`, false);
   });
+
+  // Don't show player during miss animations after frame 50 (player_on_fire is shown instead)
+  // Only hide if timer has actually started (> 0) to avoid premature hiding
+  if ((missAnimationActive && missAnimationTimer > 0 && missAnimationTimer > 50) ||
+      (torchMissAnimationActive && torchMissAnimationTimer > 0 && torchMissAnimationTimer > 50)) {
+    return;
+  }
 
   // Show hitting animation if active, otherwise show ready state
   if (attackAnimationTimer > 0 && currentAttackPosition === position) {
@@ -463,6 +557,294 @@ function updateSmokeAnimations() {
       smoke.timer = 0;
     }
   });
+}
+
+/**
+ * Start torch miss animation
+ */
+export function startTorchMissAnimation(position) {
+  console.log('Starting torch miss animation at position:', position);
+  torchMissAnimationActive = true;
+  torchMissAnimationTimer = 0;
+  torchMissAnimationPosition = position;
+  topFireActive = true;
+  topFireTimer = 0;
+  topFireCycle = 0;
+}
+
+/**
+ * Check if torch miss animation is active
+ */
+export function isTorchMissAnimationActive() {
+  return torchMissAnimationActive;
+}
+
+/**
+ * Update torch miss animation sequence
+ * Timeline (5 seconds = 300 frames at 60fps):
+ * 0-50: roof_fire_left (if TL) OR roof_fire_right (if TR)
+ * 50-150: roof_fire_center + player_on_fire + step_on_fire
+ * 150-300: roof_fire_right (if TL) OR roof_fire_left (if TR)
+ */
+function updateTorchMissAnimation() {
+  if (!torchMissAnimationActive) return;
+  
+  // Check if animation is complete (at frame 300)
+  if (torchMissAnimationTimer >= 300) {
+    // Import GameState to check if game is over
+    import('../game/logic.js').then(module => {
+      const isGameOver = module.GameState.gameOver;
+      
+      if (isGameOver) {
+        // Game over - keep animation "active" so visibility code keeps running
+        // Don't increment timer anymore, keep it at 300
+        torchMissAnimationTimer = 300;
+      } else {
+        // Normal case - animation complete, hide elements
+        torchMissAnimationActive = false;
+        setSVGVisibility('step_on_fire', false);
+        setSVGVisibility('player_on_fire', false);
+        setSVGVisibility('roof_fire_center', false);
+        setSVGVisibility('roof_fire_left', false);
+        setSVGVisibility('roof_fire_right', false);
+        torchMissAnimationPosition = null;
+      }
+      
+      // Reset the trigger flag
+      module.GameState.torchMissAnimationTriggered = false;
+    });
+    
+    // Don't increment timer if at 300
+    if (torchMissAnimationTimer > 300) {
+      torchMissAnimationTimer = 300;
+    }
+  } else {
+    // Normal animation in progress - increment timer
+    torchMissAnimationTimer++;
+    console.log('Torch miss animation timer:', torchMissAnimationTimer);
+  }
+  
+  // Determine which roof_fire to show first and last based on position
+  const isLeft = torchMissAnimationPosition === 'TL';
+  const firstRoofFire = isLeft ? 'roof_fire_left' : 'roof_fire_right';
+  const lastRoofFire = isLeft ? 'roof_fire_right' : 'roof_fire_left';
+  
+  // Set position for player_on_fire and step_on_fire (centered for torch miss)
+  const stepOnFire = document.getElementById('step_on_fire');
+  const playerOnFire = document.getElementById('player_on_fire');
+  if (stepOnFire) stepOnFire.setAttribute('transform', 'translate(17.5, 5) scale(1.15)');
+  if (playerOnFire) playerOnFire.setAttribute('transform', 'translate(17.5, 5) scale(1.15)');
+  
+  // Phase 1 (0-50): Show first roof_fire (left if TL, right if TR)
+  if (torchMissAnimationTimer >= 0 && torchMissAnimationTimer <= 300) {
+    setSVGVisibility(firstRoofFire, true);
+    console.log(firstRoofFire + ' visible');
+  }
+  
+  // Phase 2 (50-300): Show roof_fire_center + player_on_fire + step_on_fire
+  if (torchMissAnimationTimer > 50 && torchMissAnimationTimer <= 300) {
+    setSVGVisibility('roof_fire_center', true);
+    setSVGVisibility('player_on_fire', true);
+    setSVGVisibility('step_on_fire', true);
+    console.log('roof_fire_center + player_on_fire + step_on_fire visible');
+  }
+  
+  // Phase 3 (150-300): Show last roof_fire (right if TL, left if TR)
+  if (torchMissAnimationTimer > 150 && torchMissAnimationTimer <= 300) {
+    setSVGVisibility(lastRoofFire, true);
+    console.log(lastRoofFire + ' visible');
+  }
+}
+
+/**
+ * Start runner miss animation
+ */
+export function startRunnerMissAnimation(position) {
+  console.log('Starting runner miss animation at position:', position);
+  missAnimationActive = true;
+  missAnimationTimer = 0;
+  missAnimationPosition = position;
+  topFireActive = true;
+  topFireTimer = 0;
+  topFireCycle = 0;
+}
+
+/**
+ * Check if miss animation is active
+ */
+export function isMissAnimationActive() {
+  return missAnimationActive;
+}
+
+/**
+ * Update top fire animation (cycles through fire1-6 with repeating pattern)
+ * Fire spreads: 1 → 1+2 → 1+2+3 → 1+2+3+4+5+6
+ * Then cycles smoke frames (4, 5, 6) to create flickering effect
+ */
+function updateTopFireAnimation() {
+  if (!topFireActive) return;
+  
+  console.log('Top fire timer:', topFireTimer);
+  topFireTimer++;
+  
+  // Hide all fire elements first
+  for (let i = 1; i <= 6; i++) {
+    setSVGVisibility(`fire${i}`, false);
+  }
+  
+  // 5 seconds total = 300 frames
+  // Phase timing (each phase 50 frames = ~0.83s)
+  if (topFireTimer <= 50) {
+    // Phase 1: fire1 only
+    setSVGVisibility('fire1', true);
+  } else if (topFireTimer <= 100) {
+    // Phase 2: fire1+2
+    setSVGVisibility('fire1', true);
+    setSVGVisibility('fire2', true);
+  } else if (topFireTimer <= 150) {
+    // Phase 3: fire1+2+3
+    setSVGVisibility('fire1', true);
+    setSVGVisibility('fire2', true);
+    setSVGVisibility('fire3', true);
+  } else {
+    // Phase 4: fire1+2+3+4+5+6 (all visible, creates smoke/fire effect)
+    // Cycle through different combinations for flickering
+    const cycleFrame = (topFireTimer - 150) % 30;
+    setSVGVisibility('fire1', true);
+    setSVGVisibility('fire2', true);
+    setSVGVisibility('fire3', true);
+    
+    // Flicker the smoke layers (4, 5, 6) in patterns
+    if (cycleFrame < 10) {
+      setSVGVisibility('fire4', true);
+      setSVGVisibility('fire5', true);
+      setSVGVisibility('fire6', true);
+    } else if (cycleFrame < 20) {
+      setSVGVisibility('fire4', true);
+      setSVGVisibility('fire6', true);
+    } else {
+      setSVGVisibility('fire5', true);
+      setSVGVisibility('fire6', true);
+    }
+  }
+  
+  // Stop at 300 frames (5 seconds) to match miss animation
+  if (topFireTimer >= 300) {
+    // Check if game is over
+    import('../game/logic.js').then(module => {
+      const isGameOver = module.GameState.gameOver;
+      
+      if (isGameOver) {
+        // Game over - keep animation active so fire stays visible
+        topFireTimer = 300;
+      } else {
+        // Normal case - stop animation
+        topFireActive = false;
+        topFireTimer = 0;
+        // Leave fire4, fire5, fire6 visible as smoke
+        setSVGVisibility('fire4', true);
+        setSVGVisibility('fire5', true);
+        setSVGVisibility('fire6', true);
+      }
+    });
+    
+    // Keep timer at 300 to prevent increment past it
+    if (topFireTimer > 300) {
+      topFireTimer = 300;
+    }
+  }
+}
+
+/**
+ * Update runner miss animation sequence
+ * Timeline (5 seconds = 300 frames at 60fps):
+ * 0-50: step_on_fire visible
+ * 50-150: hide player, show player_on_fire
+ * 100: roof_fire_center appears
+ * 150: roof_fire_left appears  
+ * 200: roof_fire_right appears
+ * 300: animation ends, restore player
+ */
+function updateRunnerMissAnimation() {
+  if (!missAnimationActive) return;
+  
+  // Check if animation is complete (at frame 300)
+  if (missAnimationTimer >= 300) {
+    // Import GameState to check if game is over
+    import('../game/logic.js').then(module => {
+      const isGameOver = module.GameState.gameOver;
+      
+      if (isGameOver) {
+        // Game over - keep animation "active" so visibility code keeps running
+        // Don't increment timer anymore, keep it at 300
+        missAnimationTimer = 300;
+      } else {
+        // Normal case - animation complete, hide elements
+        missAnimationActive = false;
+        setSVGVisibility('step_on_fire', false);
+        setSVGVisibility('player_on_fire', false);
+        setSVGVisibility('roof_fire_center', false);
+        setSVGVisibility('roof_fire_left', false);
+        setSVGVisibility('roof_fire_right', false);
+        missAnimationPosition = null;
+      }
+      
+      // Reset the trigger flag
+      module.GameState.missAnimationTriggered = false;
+    });
+    
+    // Don't increment timer if at 300
+    if (missAnimationTimer > 300) {
+      missAnimationTimer = 300;
+    }
+  } else {
+    // Normal animation in progress - increment timer
+    missAnimationTimer++;
+    console.log('Miss animation timer:', missAnimationTimer);
+  }
+  
+  // Set position-specific transforms for player_on_fire and step_on_fire
+  const positionTransforms = {
+    'BL': 'translate(10, 5) scale(1.15)',
+    'BR': 'translate(25, 5) scale(1.15)'
+  };
+  
+  const transform = positionTransforms[missAnimationPosition] || positionTransforms['BL'];
+  
+  const stepOnFire = document.getElementById('step_on_fire');
+  const playerOnFire = document.getElementById('player_on_fire');
+  if (stepOnFire) stepOnFire.setAttribute('transform', transform);
+  if (playerOnFire) playerOnFire.setAttribute('transform', transform);
+  
+  // Phase 1 (0-300): Show step_on_fire throughout entire animation
+  if (missAnimationTimer <= 300) {
+    setSVGVisibility('step_on_fire', true);
+    console.log('step_on_fire visible');
+  }
+  
+  // Phase 2 (50-300): Hide player, show player_on_fire
+  if (missAnimationTimer > 50 && missAnimationTimer <= 300) {
+    setSVGVisibility('player_on_fire', true);
+    console.log('player_on_fire visible');
+  }
+  
+  // Phase 3 (100+): Show roof_fire_center
+  if (missAnimationTimer >= 100 && missAnimationTimer <= 300) {
+    setSVGVisibility('roof_fire_center', true);
+    console.log('roof_center visible');
+  }
+  
+  // Phase 4 (150+): Show roof_fire_left
+  if (missAnimationTimer >= 150 && missAnimationTimer <= 300) {
+    setSVGVisibility('roof_fire_left', true);
+    console.log('roof_fire_left visible');
+  }
+  
+  // Phase 5 (200+): Show roof_fire_right
+  if (missAnimationTimer >= 200 && missAnimationTimer <= 300) {
+    setSVGVisibility('roof_fire_right', true);
+    console.log('roof_fire_right visible');
+  }
 }
 
 /**
@@ -634,11 +1016,15 @@ export function render(gameState) {
   }
 
   if (gameState.scene === 'PLAYING') {
-    drawStaticLayout(gameState.currentPosition);
+    drawStaticLayout(gameState.currentPosition, gameState);
     
     // Draw torches
     drawTorch('TL', gameState.lanes.TL.stage);
     drawTorch('TR', gameState.lanes.TR.stage);
+    
+    // Draw runners
+    drawRunner('BL', gameState.lanes.BL.stage, gameState.lanes.BL.falling);
+    drawRunner('BR', gameState.lanes.BR.stage, gameState.lanes.BR.falling);
     
     // Draw fires
     drawFires(gameState.misses);
@@ -654,4 +1040,7 @@ export function render(gameState) {
 
   updateAttackFlash();
   updateSmokeAnimations();
+  updateTopFireAnimation();
+  updateRunnerMissAnimation();
+  updateTorchMissAnimation();
 }

@@ -154,6 +154,26 @@
       <text id="missText" visibility="hidden" x="350" y="45" font-family="monospace" font-size="14" fill="#222" text-anchor="middle">MISS</text>
 
       <!-- -------------------- -->
+      <!-- Miss Animation Elements -->
+      <!-- -------------------- -->
+      <!-- Top fire animation (fire spreading) -->
+      <g id="fire1" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="fire2" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="fire3" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="fire4" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="fire5" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="fire6" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      
+      <!-- Roof fire animation -->
+      <g id="roof_fire_center" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="roof_fire_left" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      <g id="roof_fire_right" visibility="hidden" transform="translate(10, 0) scale(1.15)"></g>
+      
+      <!-- Player and step fire -->
+      <g id="player_on_fire" visibility="hidden" transform="translate(10, 5) scale(1.15)"></g>
+      <g id="step_on_fire" visibility="hidden" transform="translate(10, 5) scale(1.15)"></g>
+
+      <!-- -------------------- -->
       <!-- Title Screen Elements -->
       <!-- -------------------- -->
       <g id="titleScreen" visibility="hidden">
@@ -166,10 +186,7 @@
       <!-- -------------------- -->
       <!-- Game Over Indicator -->
       <!-- -------------------- -->
-      <g id="gameOverScreen" visibility="hidden">
-        <rect x="120" y="100" width="160" height="50" fill="#cfd8c2" stroke="#222" stroke-width="2"/>
-        <text x="200" y="130" font-family="monospace" font-size="20" fill="#222" text-anchor="middle" font-weight="bold">GAME OVER</text>
-      </g>
+      <text id="gameOverScreen" visibility="hidden" x="50" y="45" font-family="monospace" font-size="14" fill="#222" text-anchor="middle">GAME OVER</text>
 
       <!-- -------------------- -->
       <!-- Score Display - 7-Segment Digits -->
