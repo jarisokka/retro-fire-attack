@@ -4,6 +4,14 @@
 let attackFlashTimer = 0;
 let attackAnimationTimer = 0;
 let currentAttackPosition = null;
+let hitAnimationTimer = 0;
+let currentHitPosition = null;
+
+// Smoke animation state
+const smokeAnimations = {
+  TL: { active: false, frame: 0, timer: 0 },
+  TR: { active: false, frame: 0, timer: 0 }
+};
 
 /**
  * Load external SVG sprites and inject into DOM
@@ -11,12 +19,14 @@ let currentAttackPosition = null;
 async function loadSprites() {
   try {
     // Load all SVG files
-    const [readyResponse, hitResponse, torchResponse, runnerResponse, livesResponse] = await Promise.all([
+    const [readyResponse, hitResponse, torchResponse, runnerResponse, livesResponse, hitAnimationResponse, smokeAnimationResponse] = await Promise.all([
       fetch('assets/sprites/cowboy-ready.svg'),
       fetch('assets/sprites/cowboy-hit.svg'),
       fetch('assets/sprites/torch_attack.svg'),
       fetch('assets/sprites/runner_attack.svg'),
-      fetch('assets/sprites/lives.svg')
+      fetch('assets/sprites/lives.svg'),
+      fetch('assets/sprites/hit-animation.svg'),
+      fetch('assets/sprites/smoke-animation.svg')
     ]);
 
     const readyText = await readyResponse.text();
@@ -24,6 +34,8 @@ async function loadSprites() {
     const torchText = await torchResponse.text();
     const runnerText = await runnerResponse.text();
     const livesText = await livesResponse.text();
+    const hitAnimationText = await hitAnimationResponse.text();
+    const smokeAnimationText = await smokeAnimationResponse.text();
 
     // Parse SVG content
     const parser = new DOMParser();
@@ -32,6 +44,8 @@ async function loadSprites() {
     const torchDoc = parser.parseFromString(torchText, 'image/svg+xml');
     const runnerDoc = parser.parseFromString(runnerText, 'image/svg+xml');
     const livesDoc = parser.parseFromString(livesText, 'image/svg+xml');
+    const hitAnimationDoc = parser.parseFromString(hitAnimationText, 'image/svg+xml');
+    const smokeAnimationDoc = parser.parseFromString(smokeAnimationText, 'image/svg+xml');
 
     // Extract path content from each sprite group
     const readyGroups = readyDoc.querySelectorAll('g[*|label]');
@@ -39,6 +53,8 @@ async function loadSprites() {
     const torchGroups = torchDoc.querySelectorAll('g[*|label]');
     const runnerGroups = runnerDoc.querySelectorAll('g[*|label]');
     const livesGroups = livesDoc.querySelectorAll('g[*|label]');
+    const hitAnimationGroups = hitAnimationDoc.querySelectorAll('g[*|label]');
+    const smokeAnimationGroups = smokeAnimationDoc.querySelectorAll('g[*|label]');
 
     // Map labels to position codes
     const labelMap = {
@@ -123,6 +139,71 @@ async function loadSprites() {
       }
     });
 
+    // Inject hit animation sprites
+    hitAnimationGroups.forEach(group => {
+      const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+      // The hit animation has parts: top_right, top_left, bottom_left, bottom_right
+      // Map each part to its corresponding position
+      const labelToPosition = {
+        'top_left': 'TL',
+        'top_right': 'TR',
+        'bottom_left': 'BL',
+        'bottom_right': 'BR'
+      };
+      
+      const position = labelToPosition[label];
+      if (position) {
+        const targetId = `hit_${position}`;
+        const targetElement = document.getElementById(targetId);
+        
+        if (targetElement) {
+          // Clone all paths from this specific hit animation part
+          const allPaths = group.querySelectorAll('path');
+          allPaths.forEach(path => {
+            targetElement.appendChild(path.cloneNode(true));
+          });
+        }
+      }
+    });
+
+    // Inject smoke animation sprites
+    smokeAnimationGroups.forEach(group => {
+      const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
+      console.log('Smoke animation group label:', label);
+      // The smoke animation has: left1, left2, left3, left4, right1, right2, right3, right4
+      // Inject left frames to TL position, right frames to TR position
+      
+      // For top-left (TL) - use left frames
+      if (label && label.startsWith('left')) {
+        const targetId = `smoke_TL_${label}`;
+        const targetElement = document.getElementById(targetId);
+        console.log('Looking for TL smoke element:', targetId, 'found:', !!targetElement);
+        
+        if (targetElement) {
+          const paths = group.querySelectorAll('path');
+          console.log('Found paths for', label, ':', paths.length);
+          paths.forEach(path => {
+            targetElement.appendChild(path.cloneNode(true));
+          });
+        }
+      }
+      
+      // For top-right (TR) - use right frames
+      if (label && label.startsWith('right')) {
+        const targetId = `smoke_TR_${label}`;
+        const targetElement = document.getElementById(targetId);
+        console.log('Looking for TR smoke element:', targetId, 'found:', !!targetElement);
+        
+        if (targetElement) {
+          const paths = group.querySelectorAll('path');
+          console.log('Found paths for', label, ':', paths.length);
+          paths.forEach(path => {
+            targetElement.appendChild(path.cloneNode(true));
+          });
+        }
+      }
+    });
+
     console.log('Sprites loaded successfully');
     return true;
   } catch (error) {
@@ -197,6 +278,15 @@ function clearDynamicElements() {
   ['TL', 'TR', 'BL', 'BR'].forEach(pos => {
     setSVGVisibility(`player_${pos}_ready`, false);
     setSVGVisibility(`player_${pos}_hit`, false);
+    setSVGVisibility(`hit_${pos}`, false);
+  });
+
+  // Hide all smoke animations
+  ['TL', 'TR'].forEach(pos => {
+    const side = pos === 'TL' ? 'left' : 'right';
+    for (let i = 1; i <= 4; i++) {
+      setSVGVisibility(`smoke_${pos}_${side}${i}`, false);
+    }
   });
 
   // Hide fires
@@ -256,15 +346,37 @@ function drawPlayer(position) {
 /**
  * Trigger attack flash effect and hitting animation
  */
-export function triggerAttack(position) {
+export function triggerAttack(position, isSuccessfulHit = false, targetType = null) {
   attackFlashTimer = 6; // frames
-  attackAnimationTimer = 18; // frames for hitting animation (about 300ms at 60fps) - slower
+  attackAnimationTimer = 36; // frames for hitting animation (about 600ms at 60fps) - longer duration
   currentAttackPosition = position;
+  
+  // Trigger hit animation on successful hit
+  if (isSuccessfulHit) {
+    hitAnimationTimer = 36; // frames for hit animation (about 600ms at 60fps) - match hitting pose duration
+    currentHitPosition = position;
+    
+    // Trigger smoke animation for successful torch hits
+    if (targetType === 'torch' && (position === 'TL' || position === 'TR')) {
+      startSmokeAnimation(position);
+    }
+  }
   
   const flash = document.getElementById('attackFlash');
   if (flash) {
     flash.setAttribute('r', '30');
     setSVGVisibility('attackFlash', true);
+  }
+}
+
+/**
+ * Start smoke animation for a torch position
+ */
+function startSmokeAnimation(position) {
+  if (position === 'TL' || position === 'TR') {
+    smokeAnimations[position].active = true;
+    smokeAnimations[position].frame = 0;
+    smokeAnimations[position].timer = 0;
   }
 }
 
@@ -291,6 +403,66 @@ function updateAttackFlash() {
       currentAttackPosition = null;
     }
   }
+
+  // Update hit animation timer
+  if (hitAnimationTimer > 0) {
+    hitAnimationTimer--;
+    if (currentHitPosition) {
+      setSVGVisibility(`hit_${currentHitPosition}`, true);
+    }
+    if (hitAnimationTimer === 0) {
+      if (currentHitPosition) {
+        setSVGVisibility(`hit_${currentHitPosition}`, false);
+      }
+      currentHitPosition = null;
+    }
+  }
+}
+
+/**
+ * Update smoke animations
+ * Animation sequence over 3 seconds (180 frames at 60fps):
+ * - Frames 0-44: Show frame 1
+ * - Frames 45-89: Show frames 1+2
+ * - Frames 90-134: Show frames 1+2+3
+ * - Frames 135-157: Show only frame 4
+ * - Frames 158+: Hide all
+ */
+function updateSmokeAnimations() {
+  ['TL', 'TR'].forEach(pos => {
+    const smoke = smokeAnimations[pos];
+    if (!smoke.active) return;
+    
+    smoke.timer++;
+    const side = pos === 'TL' ? 'left' : 'right';
+    
+    // Hide all frames first
+    for (let i = 1; i <= 4; i++) {
+      setSVGVisibility(`smoke_${pos}_${side}${i}`, false);
+    }
+    
+    // Show frames based on timer (3 seconds = 180 frames at 60fps)
+    if (smoke.timer <= 45) {
+      // Phase 1: Show frame 1
+      setSVGVisibility(`smoke_${pos}_${side}1`, true);
+    } else if (smoke.timer <= 90) {
+      // Phase 2: Show frames 1+2
+      setSVGVisibility(`smoke_${pos}_${side}1`, true);
+      setSVGVisibility(`smoke_${pos}_${side}2`, true);
+    } else if (smoke.timer <= 135) {
+      // Phase 3: Show frames 1+2+3
+      setSVGVisibility(`smoke_${pos}_${side}1`, true);
+      setSVGVisibility(`smoke_${pos}_${side}2`, true);
+      setSVGVisibility(`smoke_${pos}_${side}3`, true);
+    } else if (smoke.timer <= 158) {
+      // Phase 4: Show only frame 4
+      setSVGVisibility(`smoke_${pos}_${side}4`, true);
+    } else {
+      // Animation complete
+      smoke.active = false;
+      smoke.timer = 0;
+    }
+  });
 }
 
 /**
@@ -329,6 +501,7 @@ export function drawTorch(pos, stage) {
   }
 
   updateAttackFlash();
+  updateSmokeAnimations();
 }
 
 /**
@@ -377,6 +550,7 @@ export function drawRunner(pos, stage, falling) {
   }
 
   updateAttackFlash();
+  updateSmokeAnimations();
 }
 
 /**
@@ -384,9 +558,14 @@ export function drawRunner(pos, stage, falling) {
  */
 export function drawFires(misses) {
   const burnIds = ['burn1', 'burn2', 'burn3'];
+  // Show burns from right to left (burn3 first, then burn2, then burn1)
   burnIds.forEach((id, index) => {
-    setSVGVisibility(id, index < misses);
+    const reverseIndex = burnIds.length - 1 - index; // 2, 1, 0
+    setSVGVisibility(id, reverseIndex < misses);
   });
+  
+  // Show MISS text when there are any misses
+  setSVGVisibility('missText', misses > 0);
 }
 
 /**
@@ -474,4 +653,5 @@ export function render(gameState) {
   }
 
   updateAttackFlash();
+  updateSmokeAnimations();
 }

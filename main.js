@@ -109,8 +109,10 @@ window.addEventListener("keydown", (e) => {
   if (!pos) return;
 
   if (pos === GameState.currentPosition) {
-    triggerAttack(pos);
     const hit = attack();
+    // Determine the target type (torch for TL/TR, runner for BL/BR)
+    const targetType = (pos === 'TL' || pos === 'TR') ? 'torch' : 'runner';
+    triggerAttack(pos, hit, targetType);
     hit ? Sound.hit() : Sound.miss();
   } else {
     movePlayer(pos);
