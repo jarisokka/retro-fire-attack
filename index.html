@@ -8,73 +8,175 @@
   <style>
     body {
       margin: 0;
-      background: #2b2b2b;
+      background: #1a1a1a;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
-      font-family: monospace;
+      font-family: Arial, sans-serif;
     }
 
-    #gameWrapper {
-      display: flex;
-      align-items: flex-end;
-      gap: 20px;
-      padding-bottom: 30px;
-    }
-
-    #lcdContainer {
-      border: 12px solid #444;
-      border-radius: 8px;
-      padding: 20px;
+    /* OUTER ORANGE SHELL */
+    #console {
+      background: #e46a00;
+      padding: 40px 60px;
+      border-radius: 20px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
       position: relative;
     }
 
+    /* BLACK FACEPLATE */
+    #faceplate {
+      background: #000;
+      padding: 60px 60px 50px 60px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 60px;
+      position: relative;
+    }
+
+    /* LCD WRAPPER */
+    #lcdWrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* SILVER BEZEL */
+    #lcdBezel {
+      background: linear-gradient(#ddd, #aaa);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: inset 0 4px 8px rgba(255,255,255,0.5),
+                  inset 0 -4px 8px rgba(0,0,0,0.4);
+      flex-shrink: 0;
+    }
+
+    /* ORANGE INNER FRAME */
+    #lcdInnerFrame {
+      background: #e46a00;
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    /* LCD AREA */
     #lcdSVG {
       display: block;
       background-image: url('assets/bacground/background-bitmap2.png');
-      background-size: 400px 250px; /* Exact 1:1 match with SVG dimensions */
+      background-size: 400px 250px;
       background-position: 0 0;
       background-repeat: no-repeat;
     }
 
-    /* Touch Controls */
-    .control-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
+    /* TITLES */
+    #titleTop {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      font-weight: bold;
+      letter-spacing: 3px;
+      font-size: 14px;
     }
 
-    .game-button {
-      width: 80px;
-      height: 80px;
-      border: 3px solid #4a0000;
-      border-radius: 50%;
-      background: linear-gradient(145deg, #8b0000, #5a0000);
+    #titleBottom {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
       color: #fff;
-      font-size: 24px;
       font-weight: bold;
+      letter-spacing: 3px;
+      font-size: 12px;
+    }
+
+    /* RED HIT BUTTONS */
+    .hit-button {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #ff2a2a, #800000);
+      border: 4px solid #a33;
+      box-shadow: inset 0 4px 6px rgba(255,255,255,0.4),
+                  0 5px 10px rgba(0,0,0,0.7);
       cursor: pointer;
       user-select: none;
-      transition: all 0.1s;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.1);
+    }
+
+    .hit-button:active {
+      transform: translateY(3px);
+    }
+
+    /* LEFT CONTROLS */
+    #leftControls {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-family: monospace;
+      gap: 30px;
+      margin-top: 130px;
     }
 
-    .game-button:active {
-      transform: translateY(2px);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.1);
-      background: linear-gradient(145deg, #5a0000, #8b0000);
+    /* RIGHT CONTROLS */
+    #rightControls {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      margin-top: 130px;
     }
 
-    /* Hide controls on desktop, show on mobile */
-    @media (max-width: 768px) {
-      #gameWrapper {
+    /* MODE SWITCHES */
+    #modeSwitches {
+      position: absolute;
+      right: -140px;
+      top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .mode-switch {
+      width: 100px;
+      height: 35px;
+      background: linear-gradient(#ccc, #999);
+      border: 2px solid #666;
+      border-radius: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 12px;
+      user-select: none;
+    }
+
+    .mode-switch.selected {
+      background: #e46a00;
+      color: #fff;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 1024px) {
+      #console {
+        padding: 20px;
+      }
+      
+      #faceplate {
+        flex-direction: column;
+        padding: 20px;
+      }
+      
+      #leftControls, #rightControls {
         flex-direction: row;
+        gap: 15px;
+        margin: 20px 0;
+        padding-bottom: 0;
+        align-self: center;
+      }
+      
+      #modeSwitches {
+        position: static;
+        flex-direction: row;
+        margin: 20px 0;
       }
     }
 
@@ -94,23 +196,24 @@
       stroke-width: 0.5;
     }
 
-    /* DEBUG: Force all characters visible in debug mode */
-    body.debug-mode #lcdSVG g[id]:not(#titleScreen):not(#gameOverScreen) {
-      visibility: visible !important;
-    }
   </style>
 </head>
 <body>
-  <div id="gameWrapper">
-    <!-- Left Control Panel -->
-    <div class="control-panel">
-      <button class="game-button" data-key="q"></button>
-      <button class="game-button" data-key="a"></button>
-    </div>
+  <div id="console">
+    <div id="faceplate">
+      
+      <div id="titleTop">FIRE ATTACK</div>
+      <div id="titleBottom">WIDE SCREEN</div>
 
-    <!-- SVG LCD Display -->
-    <div id="lcdContainer">
-      <svg id="lcdSVG" width="400" height="250" viewBox="0 0 400 250">
+      <div id="leftControls">
+        <button class="hit-button" data-key="q"></button>
+        <button class="hit-button" data-key="a"></button>
+      </div>
+
+      <div id="lcdWrapper">
+        <div id="lcdBezel">
+        <div id="lcdInnerFrame">
+          <svg id="lcdSVG" width="400" height="250" viewBox="0 0 400 250">
       <!-- -------------------- -->
       <!-- Torches (Top) - Flying Animation Frames -->
       <!-- -------------------- -->
@@ -152,7 +255,7 @@
       <g id="runner_left_fall" visibility="hidden" transform="translate(15, 10) scale(1.15)"></g>
       
       <!-- Bottom-right runner attack -->
-      <g id="runner_right_1" visibility="hidden" transform="translate(40 10) scale(1.15)"></g>
+      <g id="runner_right_1" visibility="hidden" transform="translate(40, 10) scale(1.15)"></g>
       <g id="runner_right_2" visibility="hidden" transform="translate(35, 10) scale(1.15)"></g>
       <g id="runner_right_3" visibility="hidden" transform="translate(30, 10) scale(1.15)"></g>
       <g id="runner_right_4" visibility="hidden" transform="translate(25, 10) scale(1.15)"></g>
@@ -228,16 +331,6 @@
       <g id="step_on_fire" visibility="hidden" transform="translate(10, 5) scale(1.15)"></g>
 
       <!-- -------------------- -->
-      <!-- Title Screen Elements -->
-      <!-- -------------------- -->
-      <g id="titleScreen" visibility="hidden">
-        <text x="200" y="80" font-family="monospace" font-size="24" fill="#222" text-anchor="middle">FIRE ATTACK</text>
-        <text x="200" y="120" font-family="monospace" font-size="18" fill="#222" text-anchor="middle">GAME A</text>
-        <text x="200" y="150" font-family="monospace" font-size="18" fill="#222" text-anchor="middle">GAME B</text>
-        <rect id="gameModeSelector" x="130" y="107" width="15" height="15" fill="#222"/>
-      </g>
-
-      <!-- -------------------- -->
       <!-- Game Over Indicator -->
       <!-- -------------------- -->
       <text id="gameOverScreen" visibility="hidden" x="50" y="45" font-family="monospace" font-size="14" fill="#222" text-anchor="middle">GAME OVER</text>
@@ -278,23 +371,25 @@
         </g>
       </g>
     </svg>
-  </div>
+        </div>
+      </div>
 
-    <!-- Right Control Panel -->
-    <div class="control-panel">
-      <button class="game-button" data-key="e"></button>
-      <button class="game-button" data-key="d"></button>
+      <div id="modeSwitches">
+        <button class="mode-switch selected" id="gameModeA" data-mode="A">GAME A</button>
+        <button class="mode-switch" id="gameModeB" data-mode="B">GAME B</button>
+      </div>
+    </div>
+
+    <div id="rightControls">
+      <button class="hit-button" data-key="e"></button>
+      <button class="hit-button" data-key="d"></button>
+    </div>
+
     </div>
   </div>
 
   <canvas id="lcd" width="320" height="240"></canvas>
 
-  <!-- DEBUG: Show all characters button -->
-  <div style="position: fixed; top: 10px; left: 10px; z-index: 1000;">
-    <button id="debugToggle" style="padding: 10px 20px; font-size: 14px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px;">
-      Show All Characters
-    </button>
-  </div>
 
   <script type="module">
     // DEBUG: Set up before game loads
@@ -302,9 +397,10 @@
 
     // Touch Controls - Simulate keyboard events
     import { unlockAudio } from './audio/sound.js';
+    import { startGame, setGameMode } from './game/logic.js';
     
     document.addEventListener('DOMContentLoaded', () => {
-      const buttons = document.querySelectorAll('.game-button');
+      const buttons = document.querySelectorAll('.hit-button');
       
       buttons.forEach(button => {
         const key = button.getAttribute('data-key');
@@ -332,30 +428,34 @@
         });
         window.dispatchEvent(event);
       }
+
+      // Game Mode Buttons - Start game immediately when clicked
+      const gameModeButtons = document.querySelectorAll('.mode-switch');
+      
+      gameModeButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          unlockAudio();
+          const mode = button.getAttribute('data-mode');
+          
+          // Update selected state
+          gameModeButtons.forEach(btn => btn.classList.remove('selected'));
+          button.classList.add('selected');
+          
+          // Start game with selected mode
+          setGameMode(mode);
+          startGame(mode);
+        });
+      });
+
+      // Set default selected mode to A
+      document.getElementById('gameModeA').classList.add('selected');
     });
   </script>
 
   <script type="module" src="main.js"></script>
 
-  <script>
-    // DEBUG: Toggle all characters visibility (after game loads)
-    const debugToggle = document.getElementById('debugToggle');
-    let debugMode = false;
 
-    debugToggle.addEventListener('click', () => {
-      debugMode = !debugMode;
-      window.DEBUG_MODE = debugMode;
-      
-      // Toggle debug class on body for CSS override
-      document.body.classList.toggle('debug-mode', debugMode);
-      
-      debugToggle.textContent = debugMode ? 'Hide All Characters' : 'Show All Characters';
-      debugToggle.style.background = debugMode ? '#f44336' : '#4CAF50';
-      
-      // Dispatch event for game to pause/resume
-      window.dispatchEvent(new CustomEvent('debugModeChanged', { detail: { enabled: debugMode } }));
-    });
-  </script>
 </body>
 </html>
 

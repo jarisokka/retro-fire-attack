@@ -374,18 +374,13 @@ function clearDynamicElements() {
 }
 
 /**
- * Draw the title screen
+ * Draw the title screen (now just shows waiting state)
  */
 export function drawTitleScreen(mode) {
   clearDynamicElements();
-  setSVGVisibility('titleScreen', true);
   setSVGVisibility('gameOverScreen', false);
-
-  // Move selector based on mode
-  const selector = document.getElementById('gameModeSelector');
-  if (selector) {
-    selector.setAttribute('y', mode === 'A' ? '107' : '137');
-  }
+  // Show static layout with player at default position
+  setSVGVisibility('player_TL', true);
 }
 
 /**
@@ -393,7 +388,6 @@ export function drawTitleScreen(mode) {
  */
 export function drawStaticLayout(playerPosition, gameState = null) {
   clearDynamicElements();
-  setSVGVisibility('titleScreen', false);
   setSVGVisibility('gameOverScreen', false);
 
   // Show the player at current position

@@ -7,7 +7,6 @@ import {
   drawRunner,
   drawFires,
   drawGameOver,
-  drawTitleScreen,
   drawScore,
   startRunnerMissAnimation,
   isMissAnimationActive,
@@ -63,11 +62,6 @@ setInterval(() => {
 // DRAW (no longer used, kept for reference)
 // --------------------
 function draw() {
-  if (GameState.scene === "TITLE") {
-    drawTitleScreen(GameState.gameMode);
-    return;
-  }
-
   if (GameState.scene === "PLAYING") {
     drawScore(GameState.score);
     drawStaticLayout(GameState.currentPosition);
@@ -94,19 +88,6 @@ window.addEventListener("keydown", (e) => {
   unlockAudio();
 
   // --------------------
-  // TITLE SCREEN INPUT
-  // --------------------
-  if (GameState.scene === "TITLE") {
-    if (e.key === "1") setGameMode("A");
-    if (e.key === "2") setGameMode("B");
-
-    if (e.key === "Enter") {
-      startGame(GameState.gameMode);
-    }
-    return;
-  }
-
-  // --------------------
   // GAME OVER INPUT
   // --------------------
   if (GameState.scene === "GAMEOVER") {
@@ -119,6 +100,8 @@ window.addEventListener("keydown", (e) => {
   // --------------------
   // PLAYING INPUT
   // --------------------
+  if (GameState.scene !== "PLAYING") return;
+
   const keyMap = {
     q: "TL",
     e: "TR",

@@ -85,16 +85,26 @@ export function startGame(mode) {
 
   GameState.bonus[200] = false;
   GameState.bonus[500] = false;
+
+  // Reset miss animation flags
+  GameState.missAnimationTriggered = false;
+  GameState.torchMissAnimationTriggered = false;
+  GameState.lastMissPosition = null;
 }
 
 export function returnToTitle() {
   GameState.scene = "TITLE";
+  // Reset miss animation flags
+  GameState.missAnimationTriggered = false;
+  GameState.torchMissAnimationTriggered = false;
+  GameState.lastMissPosition = null;
 }
 
 // --------------------
 // UPDATE
 // --------------------
 export function updateGame() {
+  if (GameState.scene !== "PLAYING") return;
   if (GameState.gameOver) return;
 
   Object.keys(GameState.lanes).forEach((laneKey) => {
