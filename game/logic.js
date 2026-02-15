@@ -255,7 +255,6 @@ function registerMiss(laneKey) {
 
   if (GameState.misses >= 3) {
     GameState.gameOver = true;
-    Sound.gameOver();
     // Transition to GAMEOVER scene after a delay to let animation finish
     // All miss animations are 5 seconds
     setTimeout(() => {

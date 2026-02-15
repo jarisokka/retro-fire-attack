@@ -1,11 +1,21 @@
 // SVG-based LCD Renderer for Fire Attack
 // Toggles visibility of SVG elements instead of drawing on canvas
 
+import { Sound } from '../audio/sound.js';
+
 let attackFlashTimer = 0;
 let attackAnimationTimer = 0;
 let currentAttackPosition = null;
 let hitAnimationTimer = 0;
 let currentHitPosition = null;
+
+// Track previous stages to detect transitions
+const previousStages = {
+  TL: 0,
+  TR: 0,
+  BL: 0,
+  BR: 0
+};
 
 // Smoke animation state
 const smokeAnimations = {
@@ -564,6 +574,7 @@ function updateSmokeAnimations() {
  */
 export function startTorchMissAnimation(position) {
   console.log('Starting torch miss animation at position:', position);
+  Sound.burn();
   torchMissAnimationActive = true;
   torchMissAnimationTimer = 0;
   torchMissAnimationPosition = position;
@@ -661,6 +672,7 @@ function updateTorchMissAnimation() {
  */
 export function startRunnerMissAnimation(position) {
   console.log('Starting runner miss animation at position:', position);
+  Sound.burn();
   missAnimationActive = true;
   missAnimationTimer = 0;
   missAnimationPosition = position;
@@ -859,6 +871,14 @@ export function drawTorch(pos, stage) {
   // Determine side (TL uses left, TR uses right)
   const side = pos === 'TL' ? 'left' : 'right';
   
+  // Play flying torch sound on stage transitions 1-5 (throwing and flying)
+  if (stage >= 1 && stage <= 5 && previousStages[pos] !== stage) {
+    Sound.flyingTorch();
+  }
+  
+  // Always update previous stage
+  previousStages[pos] = stage;
+  
   // Hide all torch attack sprites for this side first
   setSVGVisibility(`throw_${side}_body`, false);
   setSVGVisibility(`throw_${side}_hand_1`, false);
@@ -896,6 +916,15 @@ export function drawTorch(pos, stage) {
 export function drawRunner(pos, stage, falling) {
   // Determine side (BL uses left, BR uses right)
   const side = pos === 'BL' ? 'left' : 'right';
+  
+  // Play runner sound on stage transitions 1-5 (running + first climb)
+  // Don't play on stage 6 (climb_hand_2) or stage 7 (fall)
+  if (stage >= 1 && stage <= 5 && !falling && previousStages[pos] !== stage) {
+    Sound.runner();
+  }
+  
+  // Always update previous stage
+  previousStages[pos] = stage;
   
   // Hide all runner attack sprites for this side first
   setSVGVisibility(`runner_${side}_1`, false);
