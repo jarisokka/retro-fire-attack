@@ -198,7 +198,6 @@ async function loadSprites() {
     // Inject smoke animation sprites
     smokeAnimationGroups.forEach(group => {
       const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
-      console.log('Smoke animation group label:', label);
       // The smoke animation has: left1, left2, left3, left4, right1, right2, right3, right4
       // Inject left frames to TL position, right frames to TR position
       
@@ -206,11 +205,9 @@ async function loadSprites() {
       if (label && label.startsWith('left')) {
         const targetId = `smoke_TL_${label}`;
         const targetElement = document.getElementById(targetId);
-        console.log('Looking for TL smoke element:', targetId, 'found:', !!targetElement);
         
         if (targetElement) {
           const paths = group.querySelectorAll('path');
-          console.log('Found paths for', label, ':', paths.length);
           paths.forEach(path => {
             targetElement.appendChild(path.cloneNode(true));
           });
@@ -221,11 +218,9 @@ async function loadSprites() {
       if (label && label.startsWith('right')) {
         const targetId = `smoke_TR_${label}`;
         const targetElement = document.getElementById(targetId);
-        console.log('Looking for TR smoke element:', targetId, 'found:', !!targetElement);
         
         if (targetElement) {
           const paths = group.querySelectorAll('path');
-          console.log('Found paths for', label, ':', paths.length);
           paths.forEach(path => {
             targetElement.appendChild(path.cloneNode(true));
           });
@@ -236,7 +231,6 @@ async function loadSprites() {
     // Inject fire-actions sprites
     fireActionsGroups.forEach(group => {
       const label = group.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
-      console.log('Fire actions group label:', label);
       
       // Handle top_fire group (contains fire1-6 sub-groups)
       if (label === 'top_fire') {
@@ -257,16 +251,11 @@ async function loadSprites() {
       if (label === 'roof_fire') {
         // Look for direct path elements with inkscape:label attributes
         const paths = group.querySelectorAll('path[*|label]');
-        console.log('Found roof_fire paths:', paths.length);
         paths.forEach(path => {
           const pathLabel = path.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label');
-          console.log('Roof fire path label:', pathLabel);
           const targetElement = document.getElementById(pathLabel);
           if (targetElement) {
             targetElement.appendChild(path.cloneNode(true));
-            console.log('Injected', pathLabel, 'into DOM');
-          } else {
-            console.log('Target element not found for:', pathLabel);
           }
         });
       }
@@ -283,7 +272,6 @@ async function loadSprites() {
       }
     });
 
-    console.log('Sprites loaded successfully');
     return true;
   } catch (error) {
     console.error('Failed to load sprites:', error);
@@ -302,8 +290,6 @@ export async function initSVG() {
   const svg = document.getElementById('lcdSVG');
   if (!svg) {
     console.error('SVG element not found!');
-  } else {
-    console.log('SVG renderer initialized successfully');
   }
 }
 
@@ -573,7 +559,6 @@ function updateSmokeAnimations() {
  * Start torch miss animation
  */
 export function startTorchMissAnimation(position) {
-  console.log('Starting torch miss animation at position:', position);
   Sound.burn();
   torchMissAnimationActive = true;
   torchMissAnimationTimer = 0;
@@ -632,7 +617,6 @@ function updateTorchMissAnimation() {
   } else {
     // Normal animation in progress - increment timer
     torchMissAnimationTimer++;
-    console.log('Torch miss animation timer:', torchMissAnimationTimer);
   }
   
   // Determine which roof_fire to show first and last based on position
@@ -649,7 +633,6 @@ function updateTorchMissAnimation() {
   // Phase 1 (0-50): Show first roof_fire (left if TL, right if TR)
   if (torchMissAnimationTimer >= 0 && torchMissAnimationTimer <= 300) {
     setSVGVisibility(firstRoofFire, true);
-    console.log(firstRoofFire + ' visible');
   }
   
   // Phase 2 (50-300): Show roof_fire_center + player_on_fire + step_on_fire
@@ -657,13 +640,11 @@ function updateTorchMissAnimation() {
     setSVGVisibility('roof_fire_center', true);
     setSVGVisibility('player_on_fire', true);
     setSVGVisibility('step_on_fire', true);
-    console.log('roof_fire_center + player_on_fire + step_on_fire visible');
   }
   
   // Phase 3 (150-300): Show last roof_fire (right if TL, left if TR)
   if (torchMissAnimationTimer > 150 && torchMissAnimationTimer <= 300) {
     setSVGVisibility(lastRoofFire, true);
-    console.log(lastRoofFire + ' visible');
   }
 }
 
@@ -671,7 +652,6 @@ function updateTorchMissAnimation() {
  * Start runner miss animation
  */
 export function startRunnerMissAnimation(position) {
-  console.log('Starting runner miss animation at position:', position);
   Sound.burn();
   missAnimationActive = true;
   missAnimationTimer = 0;
@@ -696,7 +676,6 @@ export function isMissAnimationActive() {
 function updateTopFireAnimation() {
   if (!topFireActive) return;
   
-  console.log('Top fire timer:', topFireTimer);
   topFireTimer++;
   
   // Hide all fire elements first
@@ -812,7 +791,6 @@ function updateRunnerMissAnimation() {
   } else {
     // Normal animation in progress - increment timer
     missAnimationTimer++;
-    console.log('Miss animation timer:', missAnimationTimer);
   }
   
   // Set position-specific transforms for player_on_fire and step_on_fire
@@ -831,31 +809,26 @@ function updateRunnerMissAnimation() {
   // Phase 1 (0-300): Show step_on_fire throughout entire animation
   if (missAnimationTimer <= 300) {
     setSVGVisibility('step_on_fire', true);
-    console.log('step_on_fire visible');
   }
   
   // Phase 2 (50-300): Hide player, show player_on_fire
   if (missAnimationTimer > 50 && missAnimationTimer <= 300) {
     setSVGVisibility('player_on_fire', true);
-    console.log('player_on_fire visible');
   }
   
   // Phase 3 (100+): Show roof_fire_center
   if (missAnimationTimer >= 100 && missAnimationTimer <= 300) {
     setSVGVisibility('roof_fire_center', true);
-    console.log('roof_center visible');
   }
   
   // Phase 4 (150+): Show roof_fire_left
   if (missAnimationTimer >= 150 && missAnimationTimer <= 300) {
     setSVGVisibility('roof_fire_left', true);
-    console.log('roof_fire_left visible');
   }
   
   // Phase 5 (200+): Show roof_fire_right
   if (missAnimationTimer >= 200 && missAnimationTimer <= 300) {
     setSVGVisibility('roof_fire_right', true);
-    console.log('roof_fire_right visible');
   }
 }
 

@@ -236,19 +236,16 @@ function checkBonus() {
 // MISS / GAME OVER
 // --------------------
 function registerMiss(laneKey) {
-  console.log('Register miss called for lane:', laneKey);
   GameState.misses++;
 
   // Trigger runner miss animation for BL and BR lanes
   if (laneKey === 'BL' || laneKey === 'BR') {
-    console.log('Setting missAnimationTriggered for runner miss');
     GameState.lastMissPosition = laneKey;
     GameState.missAnimationTriggered = true;
   }
   
   // Trigger torch miss animation for TL and TR lanes
   if (laneKey === 'TL' || laneKey === 'TR') {
-    console.log('Setting torchMissAnimationTriggered for torch miss');
     GameState.lastMissPosition = laneKey;
     GameState.torchMissAnimationTriggered = true;
   }

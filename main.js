@@ -32,7 +32,6 @@ import { Sound, unlockAudio } from "./audio/sound.js";
 let gameReady = false;
 initSVG().then(() => {
   gameReady = true;
-  console.log('Game ready');
 });
 
 // --------------------
@@ -45,14 +44,12 @@ setInterval(() => {
     
     // Check if runner miss animation should be triggered
     if (GameState.missAnimationTriggered && GameState.lastMissPosition) {
-      console.log('Triggering runner miss animation for position:', GameState.lastMissPosition);
       startRunnerMissAnimation(GameState.lastMissPosition);
       GameState.missAnimationTriggered = false;
     }
     
     // Check if torch miss animation should be triggered
     if (GameState.torchMissAnimationTriggered && GameState.lastMissPosition) {
-      console.log('Triggering torch miss animation for position:', GameState.lastMissPosition);
       startTorchMissAnimation(GameState.lastMissPosition);
       GameState.torchMissAnimationTriggered = false;
     }
