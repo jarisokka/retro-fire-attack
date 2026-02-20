@@ -43,11 +43,10 @@ function playWithOffset(audio, offset = 0) {
 
 // ---- Sound Events ----
 export const Sound = {
-  // Start from 0.45 s where the actual sound begins (skip leading silence)
-  hit:         () => playWithOffset(audioFiles.hit, 0.45),
-  burn:        () => playWithOffset(audioFiles.burn, 0),
-  flyingTorch: () => playWithOffset(audioFiles.flyingTorch, 0.45),
-  runner:      () => playWithOffset(audioFiles.runner, 0.45),
+  hit:         () => playWithOffset(audioFiles.hit),
+  burn:        () => playWithOffset(audioFiles.burn),
+  flyingTorch: () => playWithOffset(audioFiles.flyingTorch),
+  runner:      () => playWithOffset(audioFiles.runner),
   bonus:       () => beep(1000, 0.12),
 };
 
