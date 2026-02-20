@@ -13,10 +13,10 @@ function createAudio(src, volume) {
 }
 
 const audioFiles = {
-  hit:         createAudio("/audio/hit.m4a", 0.5),
-  burn:        createAudio("/audio/burn.m4a", 0.5),
-  flyingTorch: createAudio("/audio/flying-torch.m4a", 0.5),
-  runner:      createAudio("/audio/runner.m4a", 0.5),
+  hit:         createAudio("audio/hit.m4a", 0.5),
+  burn:        createAudio("audio/burn.m4a", 0.5),
+  flyingTorch: createAudio("audio/flying-torch.m4a", 0.5),
+  runner:      createAudio("audio/runner.m4a", 0.5),
 };
 
 // ---- Web Audio beep ----
