@@ -46,7 +46,6 @@
     #lcdWrapper {
       position: relative;
       display: flex;
-      flex-direction: column;
       align-items: center;
     }
 
@@ -136,13 +135,10 @@
 
     /* MODE SWITCHES */
     #modeSwitches {
-      position: absolute;
-      right: -140px;
-      top: 0;
-      transform: none;
       display: flex;
       flex-direction: column;
       gap: 15px;
+      margin-bottom: 10px;
     }
 
     .mode-switch {
@@ -210,11 +206,6 @@
     body.portrait-mode #faceplate {
       padding: 28px 28px 24px 28px;
       border-radius: 10px;
-    }
-
-    body.portrait-mode #modeSwitches {
-      right: 12px;
-      top: 18px;
     }
 
     canvas {
@@ -410,14 +401,13 @@
     </svg>
         </div>
       </div>
-
-      <div id="modeSwitches">
-        <button class="mode-switch selected" id="gameModeA" data-mode="A">GAME A</button>
-        <button class="mode-switch" id="gameModeB" data-mode="B">GAME B</button>
       </div>
-    </div>
 
       <div id="rightControls">
+        <div id="modeSwitches">
+          <button class="mode-switch selected" id="gameModeA" data-mode="A">GAME A</button>
+          <button class="mode-switch" id="gameModeB" data-mode="B">GAME B</button>
+        </div>
         <button class="hit-button" data-key="e"></button>
         <button class="hit-button" data-key="d"></button>
       </div>

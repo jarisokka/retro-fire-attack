@@ -82,6 +82,13 @@ function draw() {
 }
 
 // --------------------
+// AUDIO UNLOCK – global safety net for iOS Safari
+// Covers any touch or click that isn't on a labelled button
+// --------------------
+window.addEventListener("touchstart", unlockAudio, { once: true, passive: true });
+window.addEventListener("click",      unlockAudio, { once: true });
+
+// --------------------
 // INPUT
 // --------------------
 window.addEventListener("keydown", (e) => {
