@@ -38,6 +38,10 @@ let topFireActive = false;
 let topFireTimer = 0;
 let topFireCycle = 0; // Track animation cycle
 
+// Dirty flags — skip DOM writes when state hasn't changed
+let _lastScore = -1;
+let _lastMisses = -1;
+
 /**
  * Load external SVG sprites and inject into DOM
  */
@@ -324,16 +328,29 @@ export function resetAnimations() {
   previousStages.BL = 0;
   previousStages.BR = 0;
 
+  // Reset dirty flags so new game redraws score/fires
+  _lastScore = -1;
+  _lastMisses = -1;
+
   clearDynamicElements();
 }
 
-/**
- * Helper function to toggle SVG element visibility
- */
+// ---- Element + visibility cache ----
+// Eliminates repeated getElementById calls and skips DOM writes when state unchanged.
+const _elCache = {};
+const _visCache = {};
+
 function setSVGVisibility(id, visible) {
-  const el = document.getElementById(id);
+  const visStr = visible ? 'visible' : 'hidden';
+  if (_visCache[id] === visStr) return; // nothing to change
+  let el = _elCache[id];
+  if (el === undefined) {
+    el = document.getElementById(id);
+    _elCache[id] = el;
+  }
   if (el) {
-    el.setAttribute('visibility', visible ? 'visible' : 'hidden');
+    el.setAttribute('visibility', visStr);
+    _visCache[id] = visStr;
   }
 }
 
@@ -612,40 +629,26 @@ export function isTorchMissAnimationActive() {
  * 50-150: roof_fire_center + player_on_fire + step_on_fire
  * 150-300: roof_fire_right (if TL) OR roof_fire_left (if TR)
  */
-function updateTorchMissAnimation() {
+function updateTorchMissAnimation(gameState) {
   if (!torchMissAnimationActive) return;
-  
+
   // Check if animation is complete (at frame 300)
   if (torchMissAnimationTimer >= 300) {
-    // Import GameState to check if game is over
-    import('../game/logic.js').then(module => {
-      const isGameOver = module.GameState.gameOver;
-      
-      if (isGameOver) {
-        // Game over - keep animation "active" so visibility code keeps running
-        // Don't increment timer anymore, keep it at 300
-        torchMissAnimationTimer = 300;
-      } else {
-        // Normal case - animation complete, hide elements
-        torchMissAnimationActive = false;
-        setSVGVisibility('step_on_fire', false);
-        setSVGVisibility('player_on_fire', false);
-        setSVGVisibility('roof_fire_center', false);
-        setSVGVisibility('roof_fire_left', false);
-        setSVGVisibility('roof_fire_right', false);
-        torchMissAnimationPosition = null;
-      }
-      
-      // Reset the trigger flag
-      module.GameState.torchMissAnimationTriggered = false;
-    });
-    
-    // Don't increment timer if at 300
-    if (torchMissAnimationTimer > 300) {
-      torchMissAnimationTimer = 300;
+    gameState.torchMissAnimationTriggered = false;
+    if (!gameState.gameOver) {
+      // Normal case - animation complete, hide elements
+      torchMissAnimationActive = false;
+      setSVGVisibility('step_on_fire', false);
+      setSVGVisibility('player_on_fire', false);
+      setSVGVisibility('roof_fire_center', false);
+      setSVGVisibility('roof_fire_left', false);
+      setSVGVisibility('roof_fire_right', false);
+      torchMissAnimationPosition = null;
+      return;
     }
+    // Game over: keep timer frozen at 300 and fall through to display code
+    // so fire elements stay visible after clearDynamicElements() hides them each frame.
   } else {
-    // Normal animation in progress - increment timer
     torchMissAnimationTimer++;
   }
   
@@ -703,16 +706,30 @@ export function isMissAnimationActive() {
  * Fire spreads: 1 → 1+2 → 1+2+3 → 1+2+3+4+5+6
  * Then cycles smoke frames (4, 5, 6) to create flickering effect
  */
-function updateTopFireAnimation() {
+function updateTopFireAnimation(gameState) {
   if (!topFireActive) return;
-  
-  topFireTimer++;
-  
-  // Hide all fire elements first
+
+  if (topFireTimer >= 300) {
+    if (!gameState.gameOver) {
+      // Normal case - stop animation, leave smoke layers visible
+      topFireActive = false;
+      topFireTimer = 0;
+      setSVGVisibility('fire4', true);
+      setSVGVisibility('fire5', true);
+      setSVGVisibility('fire6', true);
+      return;
+    }
+    // Game over: keep timer frozen at 300 and fall through to display code
+    // so fires stay visible after clearDynamicElements() hides them each frame.
+  } else {
+    topFireTimer++;
+  }
+
+  // Hide all fire elements first (clearDynamicElements already does this, but be explicit)
   for (let i = 1; i <= 6; i++) {
     setSVGVisibility(`fire${i}`, false);
   }
-  
+
   // 5 seconds total = 300 frames
   // Phase timing (each phase 50 frames = ~0.83s)
   if (topFireTimer <= 50) {
@@ -734,7 +751,7 @@ function updateTopFireAnimation() {
     setSVGVisibility('fire1', true);
     setSVGVisibility('fire2', true);
     setSVGVisibility('fire3', true);
-    
+
     // Flicker the smoke layers (4, 5, 6) in patterns
     if (cycleFrame < 10) {
       setSVGVisibility('fire4', true);
@@ -748,32 +765,6 @@ function updateTopFireAnimation() {
       setSVGVisibility('fire6', true);
     }
   }
-  
-  // Stop at 300 frames (5 seconds) to match miss animation
-  if (topFireTimer >= 300) {
-    // Check if game is over
-    import('../game/logic.js').then(module => {
-      const isGameOver = module.GameState.gameOver;
-      
-      if (isGameOver) {
-        // Game over - keep animation active so fire stays visible
-        topFireTimer = 300;
-      } else {
-        // Normal case - stop animation
-        topFireActive = false;
-        topFireTimer = 0;
-        // Leave fire4, fire5, fire6 visible as smoke
-        setSVGVisibility('fire4', true);
-        setSVGVisibility('fire5', true);
-        setSVGVisibility('fire6', true);
-      }
-    });
-    
-    // Keep timer at 300 to prevent increment past it
-    if (topFireTimer > 300) {
-      topFireTimer = 300;
-    }
-  }
 }
 
 /**
@@ -782,44 +773,30 @@ function updateTopFireAnimation() {
  * 0-50: step_on_fire visible
  * 50-150: hide player, show player_on_fire
  * 100: roof_fire_center appears
- * 150: roof_fire_left appears  
+ * 150: roof_fire_left appears
  * 200: roof_fire_right appears
  * 300: animation ends, restore player
  */
-function updateRunnerMissAnimation() {
+function updateRunnerMissAnimation(gameState) {
   if (!missAnimationActive) return;
-  
+
   // Check if animation is complete (at frame 300)
   if (missAnimationTimer >= 300) {
-    // Import GameState to check if game is over
-    import('../game/logic.js').then(module => {
-      const isGameOver = module.GameState.gameOver;
-      
-      if (isGameOver) {
-        // Game over - keep animation "active" so visibility code keeps running
-        // Don't increment timer anymore, keep it at 300
-        missAnimationTimer = 300;
-      } else {
-        // Normal case - animation complete, hide elements
-        missAnimationActive = false;
-        setSVGVisibility('step_on_fire', false);
-        setSVGVisibility('player_on_fire', false);
-        setSVGVisibility('roof_fire_center', false);
-        setSVGVisibility('roof_fire_left', false);
-        setSVGVisibility('roof_fire_right', false);
-        missAnimationPosition = null;
-      }
-      
-      // Reset the trigger flag
-      module.GameState.missAnimationTriggered = false;
-    });
-    
-    // Don't increment timer if at 300
-    if (missAnimationTimer > 300) {
-      missAnimationTimer = 300;
+    gameState.missAnimationTriggered = false;
+    if (!gameState.gameOver) {
+      // Normal case - animation complete, hide elements
+      missAnimationActive = false;
+      setSVGVisibility('step_on_fire', false);
+      setSVGVisibility('player_on_fire', false);
+      setSVGVisibility('roof_fire_center', false);
+      setSVGVisibility('roof_fire_left', false);
+      setSVGVisibility('roof_fire_right', false);
+      missAnimationPosition = null;
+      return;
     }
+    // Game over: keep timer frozen at 300 and fall through to display code
+    // so fire elements stay visible after clearDynamicElements() hides them each frame.
   } else {
-    // Normal animation in progress - increment timer
     missAnimationTimer++;
   }
   
@@ -904,9 +881,6 @@ export function drawTorch(pos, stage) {
   } else if (stage === 5) {
     setSVGVisibility(`torch_${side}_3`, true);
   }
-
-  updateAttackFlash();
-  updateSmokeAnimations();
 }
 
 /**
@@ -942,7 +916,6 @@ export function drawRunner(pos, stage, falling) {
   // Show fall animation if falling
   if (falling) {
     setSVGVisibility(`runner_${side}_fall`, true);
-    updateAttackFlash();
     return;
   }
 
@@ -962,15 +935,14 @@ export function drawRunner(pos, stage, falling) {
     setSVGVisibility(`climb_${side}_torso`, true);
     setSVGVisibility(`climb_${side}_hand_2`, true);
   }
-
-  updateAttackFlash();
-  updateSmokeAnimations();
 }
 
 /**
  * Draw burn indicators based on number of misses
  */
 export function drawFires(misses) {
+  if (misses === _lastMisses) return;
+  _lastMisses = misses;
   const burnIds = ['burn1', 'burn2', 'burn3'];
   // Show burns from right to left (burn3 first, then burn2, then burn1)
   burnIds.forEach((id, index) => {
@@ -1006,34 +978,26 @@ const SEGMENTS = {
 };
 
 export function drawScore(score) {
+  if (score === _lastScore) return;
+  _lastScore = score;
+
   const padded = Math.min(score, 999).toString().padStart(3, "0");
-  
+
   for (let i = 0; i < 3; i++) {
-    const digitGroup = document.getElementById(`digit-${i}`);
-    
-    // Hide digits that aren't needed yet
+    // Hide digit groups that aren't needed yet
     if ((i === 0 && score < 100) || (i === 1 && score < 10)) {
-      if (digitGroup) {
-        digitGroup.setAttribute('visibility', 'hidden');
-      }
+      setSVGVisibility(`digit-${i}`, false);
       continue;
     }
-    
-    // Show the digit group
-    if (digitGroup) {
-      digitGroup.setAttribute('visibility', 'visible');
-    }
-    
+
+    setSVGVisibility(`digit-${i}`, true);
+
     const digit = parseInt(padded[i]);
     const activeSegments = SEGMENTS[digit];
-    
+
     // Update each segment (A-G) for this digit
     ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach(segment => {
-      const segmentId = `digit-${i}-${segment}`;
-      const element = document.getElementById(segmentId);
-      if (element) {
-        element.setAttribute('visibility', activeSegments.includes(segment) ? 'visible' : 'hidden');
-      }
+      setSVGVisibility(`digit-${i}-${segment}`, activeSegments.includes(segment));
     });
   }
 }
@@ -1072,7 +1036,7 @@ export function render(gameState) {
 
   updateAttackFlash();
   updateSmokeAnimations();
-  updateTopFireAnimation();
-  updateRunnerMissAnimation();
-  updateTorchMissAnimation();
+  updateTopFireAnimation(gameState);
+  updateRunnerMissAnimation(gameState);
+  updateTorchMissAnimation(gameState);
 }

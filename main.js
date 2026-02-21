@@ -36,27 +36,43 @@ initSVG().then(() => {
 // --------------------
 // GAME LOOP
 // --------------------
-setInterval(() => {
+// requestAnimationFrame gives vsync-aligned frames, pauses when tab is hidden,
+// and avoids the drift/jank of setInterval on mobile.
+// The game logic was designed for 60 fps; we throttle to that on higher-refresh displays.
+const TARGET_FRAME_MS = 1000 / 60; // ~16.67 ms
+let _lastFrameTime = 0;
+
+function gameLoop(timestamp) {
+  requestAnimationFrame(gameLoop);
+
+  if (!gameReady) return;
+
+  // Throttle to ~60 fps (skips extra frames on 90/120 Hz displays)
+  if (timestamp - _lastFrameTime < TARGET_FRAME_MS - 1) return;
+  _lastFrameTime = timestamp;
+
   // Don't update game logic during miss animations
   if (!isMissAnimationActive() && !isTorchMissAnimationActive()) {
     updateGame();
-    
+
     // Check if runner miss animation should be triggered
     if (GameState.missAnimationTriggered && GameState.lastMissPosition) {
       startRunnerMissAnimation(GameState.lastMissPosition);
       GameState.missAnimationTriggered = false;
     }
-    
+
     // Check if torch miss animation should be triggered
     if (GameState.torchMissAnimationTriggered && GameState.lastMissPosition) {
       startTorchMissAnimation(GameState.lastMissPosition);
       GameState.torchMissAnimationTriggered = false;
     }
   }
-  
+
   // Always call render to update animations
   render(GameState);
-}, 1000 / 60);
+}
+
+requestAnimationFrame(gameLoop);
 
 // --------------------
 // DRAW (no longer used, kept for reference)
