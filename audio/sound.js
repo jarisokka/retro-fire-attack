@@ -1,34 +1,22 @@
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 const audioCtx = new AudioCtx();
 
-// ---- Audio pool ----
-// Creates N HTMLAudio instances for one sound file and round-robins through them.
-// This prevents rapid events (e.g. runner moving through stages) from cutting off
-// the previous play of the same sound.
-function createAudioPool(src, volume, poolSize = 3) {
-  const instances = Array.from({ length: poolSize }, () => {
-    const audio = new Audio(src);
-    audio.volume = volume;
-    audio.preload = "auto";
-    return audio;
-  });
-  let index = 0;
-  return {
-    play(offset = 0) {
-      const audio = instances[index];
-      index = (index + 1) % poolSize;
-      audio.currentTime = offset;
-      audio.play().catch(() => {});
-    },
-    instances,
-  };
+// ---- Pre-create audio objects ----
+// iOS Safari requires HTMLAudio elements to be played within a user gesture.
+// Pre-creating them and doing a silent play inside unlockAudio() registers
+// the OS-level authorization so subsequent .play() calls work freely.
+function createAudio(src, volume) {
+  const audio = new Audio(src);
+  audio.volume = volume;
+  audio.preload = "auto";
+  return audio;
 }
 
-const audioPools = {
-  hit:         createAudioPool("audio/hit.m4a",          0.5, 2),
-  burn:        createAudioPool("audio/burn.m4a",         0.5, 2),
-  flyingTorch: createAudioPool("audio/flying-torch.m4a", 0.5, 3),
-  runner:      createAudioPool("audio/runner.m4a",       0.5, 3),
+const audioFiles = {
+  hit:         createAudio("audio/hit.m4a", 0.5),
+  burn:        createAudio("audio/burn.m4a", 0.5),
+  flyingTorch: createAudio("audio/flying-torch.m4a", 0.5),
+  runner:      createAudio("audio/runner.m4a", 0.5),
 };
 
 // ---- Web Audio beep ----
@@ -47,18 +35,24 @@ function beep(freq, duration = 0.05, volume = 0.15) {
   osc.stop(audioCtx.currentTime + duration);
 }
 
+// ---- Playback helper ----
+function playWithOffset(audio, offset = 0) {
+  audio.currentTime = offset;
+  audio.play().catch(() => {});
+}
+
 // ---- Sound Events ----
 export const Sound = {
-  hit:         () => audioPools.hit.play(),
-  burn:        () => audioPools.burn.play(),
-  flyingTorch: () => audioPools.flyingTorch.play(),
-  runner:      () => audioPools.runner.play(),
+  hit:         () => playWithOffset(audioFiles.hit),
+  burn:        () => playWithOffset(audioFiles.burn),
+  flyingTorch: () => playWithOffset(audioFiles.flyingTorch),
+  runner:      () => playWithOffset(audioFiles.runner),
   bonus:       () => beep(1000, 0.12),
 };
 
 // ---- iOS / autoplay unlock ----
 // Must be called from a real user-gesture handler (touchstart, click, keydown).
-// Silently plays then immediately pauses every HTMLAudio instance so iOS
+// Silently plays then immediately pauses every HTMLAudio element so iOS
 // registers each one as "user-activated", enabling later .play() calls.
 let audioUnlocked = false;
 
@@ -71,13 +65,11 @@ export function unlockAudio() {
     audioCtx.resume();
   }
 
-  // Touch-authorize every instance in every pool
-  Object.values(audioPools).forEach(pool => {
-    pool.instances.forEach(audio => {
-      audio.play().then(() => {
-        audio.pause();
-        audio.currentTime = 0;
-      }).catch(() => {});
-    });
+  // Touch-authorize every HTMLAudio element
+  Object.values(audioFiles).forEach(audio => {
+    audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }).catch(() => {});
   });
 }
