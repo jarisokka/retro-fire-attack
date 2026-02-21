@@ -1,5 +1,4 @@
 // game/logic.js
-import { Sound } from "../audio/sound.js";
 
 export const GameState = {
   scene: "TITLE", // TITLE | PLAYING | GAMEOVER
@@ -8,11 +7,17 @@ export const GameState = {
   score: 0,
   misses: 0,
   gameOver: false,
-  totalHits: 0,  // Track total successful hits for progression
-  activeLanes: ['TL'],  // Start with only one lane active
+  totalHits: 0,  // Track total successful hits
+  activeLanes: ['TL', 'TR', 'BL', 'BR'],
+  disabledLane: null,   // Mode A: the one lane currently inactive
   missAnimationTriggered: false,  // Flag to trigger miss animation
   torchMissAnimationTriggered: false,  // Flag to trigger torch miss animation
   lastMissPosition: null,  // Track where miss occurred
+  spawnCooldown: 4,  // Beats to wait before next spawn attempt
+
+  // Chance Time
+  chanceTime: false,        // Are we currently in Chance Time?
+  chanceTimeTicks: 0,       // Remaining beats of Chance Time
 
   bonus: {
     200: false,
@@ -28,41 +33,31 @@ export const GameState = {
   }
 };
 
-// Timing constants
-const DIFFICULTY = {
-  A: {
-    initialTorchInterval: 180,  // Start slower (easier)
-    minTorchInterval: 60,        // Minimum interval (fastest)
-    torchStageTime: 50,          // Time per stage
-    initialRunnerInterval: 200,  // Runner spawn interval
-    minRunnerInterval: 80,
-    runnerStageTime: 45,         // Time per runner stage
-    fallTime: 30                 // Fall animation duration
-  },
-  B: {
-    initialTorchInterval: 140,
-    minTorchInterval: 45,
-    torchStageTime: 35,
-    initialRunnerInterval: 160,
-    minRunnerInterval: 60,
-    runnerStageTime: 32,
-    fallTime: 25
-  }
-};
+// G&W Global Clock — module-level, not per-lane
+let tickCounter = 0;
+let currentLaneCheckIndex = 0;  // round-robin for spawning
+let beatType = 'runner';        // alternates 'runner' | 'torch' each beat
+const LANE_ORDER = ['TL', 'TR', 'BL', 'BR'];
+const FALL_DURATION = 30; // frames for fall animation
 
-// Calculate current difficulty based on score
-function getCurrentInterval(mode) {
-  const config = DIFFICULTY[mode];
-  const hits = GameState.totalHits;
-  
-  // Gradually decrease interval every 5 hits
-  const reduction = Math.floor(hits / 5) * 10;
-  const currentInterval = Math.max(
-    config.minTorchInterval,
-    config.initialTorchInterval - reduction
-  );
-  
-  return currentInterval;
+// 100-point speed tiers (frames to wait between beats at 60 fps).
+// Mode B starts 2 tiers higher than Mode A, matching the original.
+function getFramesPerBeat(score, mode) {
+  const baseSpeed = (mode === "A") ? 0 : 2;
+  const tier = Math.floor(score / 100) + baseSpeed;
+  const speedTable = [
+    48, // 0–99   pts  (slowest)
+    43, // 100–199
+    38, // 200–299
+    34, // 300–399
+    29, // 400–499
+    24, // 500–599
+    22, // 600–699
+    19, // 700–799
+    17, // 800–899
+    14  // 900+         (fastest)
+  ];
+  return speedTable[Math.min(tier, speedTable.length - 1)];
 }
 
 export function startGame(mode) {
@@ -72,7 +67,22 @@ export function startGame(mode) {
   GameState.misses = 0;
   GameState.gameOver = false;
   GameState.totalHits = 0;
-  GameState.activeLanes = ['BL'];  // Start with bottom-left runner for testing
+
+  // --- Authentic lane rules ---
+  const allLanes = ['TL', 'TR', 'BL', 'BR'];
+  if (mode === 'A') {
+    // Triple-Lane Rule: exactly 3 of 4 lanes active; pick one random lane to disable.
+    GameState.disabledLane = allLanes[Math.floor(Math.random() * 4)];
+    GameState.activeLanes = allLanes.filter(l => l !== GameState.disabledLane);
+  } else {
+    // Game B: all 4 lanes active 100% of the time.
+    GameState.disabledLane = null;
+    GameState.activeLanes = [...allLanes];
+  }
+
+  // Reset Chance Time
+  GameState.chanceTime = false;
+  GameState.chanceTimeTicks = 0;
 
   Object.keys(GameState.lanes).forEach(key => {
     const lane = GameState.lanes[key];
@@ -90,6 +100,12 @@ export function startGame(mode) {
   GameState.missAnimationTriggered = false;
   GameState.torchMissAnimationTriggered = false;
   GameState.lastMissPosition = null;
+
+  // Reset G&W global clock
+  tickCounter = 0;
+  currentLaneCheckIndex = 0;
+  beatType = 'runner';
+  GameState.spawnCooldown = 1;
 }
 
 export function returnToTitle() {
@@ -104,65 +120,76 @@ export function returnToTitle() {
 // UPDATE
 // --------------------
 export function updateGame() {
-  if (GameState.scene !== "PLAYING") return;
-  if (GameState.gameOver) return;
+  if (GameState.scene !== "PLAYING" || GameState.gameOver) return;
 
-  Object.keys(GameState.lanes).forEach((laneKey) => {
-    const lane = GameState.lanes[laneKey];
-    lane.timer++;
-
-    const mode = DIFFICULTY[GameState.gameMode];
-
-    // Handle falling animation for runners
+  // Fall animations run every frame, independent of the beat clock.
+  Object.keys(GameState.lanes).forEach((key) => {
+    const lane = GameState.lanes[key];
     if (lane.type === "runner" && lane.falling) {
-      if (lane.timer > mode.fallTime) {
+      lane.timer++;
+      if (lane.timer > FALL_DURATION) {
         lane.stage = 0;
         lane.timer = 0;
         lane.falling = false;
       }
-      return;
-    }
-
-    // Spawn - only in active lanes
-    if (lane.stage === 0) {
-      // Check if this lane is active
-      if (!GameState.activeLanes.includes(laneKey)) {
-        return;  // Skip inactive lanes
-      }
-      
-      const currentInterval = getCurrentInterval(GameState.gameMode);
-      if (lane.timer > currentInterval && Math.random() < 0.5) {
-        lane.stage = 1;
-        lane.timer = 0;
-      }
-      return;
-    }
-
-    // Advance stages based on type
-    if (lane.type === "torch") {
-      // Torch: 5 stages
-      if (lane.timer > mode.torchStageTime) {
-        lane.stage++;
-        lane.timer = 0;
-
-        if (lane.stage > 5) {
-          registerMiss(laneKey);
-          lane.stage = 0;
-        }
-      }
-    } else if (lane.type === "runner") {
-      // Runner: 6 stages (stage 5 and 6 are hittable, stage 7 causes miss)
-      if (lane.timer > mode.runnerStageTime) {
-        lane.stage++;
-        lane.timer = 0;
-
-        if (lane.stage > 6) {
-          registerMiss(laneKey);
-          lane.stage = 0;
-        }
-      }
     }
   });
+
+  // --- G&W Global Heartbeat ---
+  tickCounter++;
+  const framesPerBeat = getFramesPerBeat(GameState.score, GameState.gameMode);
+
+  if (tickCounter < framesPerBeat) return;
+  tickCounter = 0;
+
+  // Chance Time countdown — one beat at a time.
+  if (GameState.chanceTime) {
+    GameState.chanceTimeTicks--;
+    if (GameState.chanceTimeTicks <= 0) {
+      GameState.chanceTime = false;
+    }
+  }
+
+  // ALTERNATING BEAT RULE:
+  // Even beats  → all runners (BL, BR) advance one step together.
+  // Odd beats   → all torches (TL, TR) advance one step together.
+  // This guarantees two runners can never land on the same hittable stage
+  // at the same time (they move in lockstep, spawn offset keeps them apart),
+  // and torches/runners are always on opposite beats so they never collide.
+
+  const typeThisBeat = beatType;
+  beatType = (beatType === 'runner') ? 'torch' : 'runner'; // flip for next beat
+
+  for (const laneKey of LANE_ORDER) {
+    const lane = GameState.lanes[laneKey];
+    if (lane.type !== typeThisBeat) continue;
+    if (lane.stage === 0 || lane.falling) continue;
+
+    lane.stage++;
+    const maxStage = (lane.type === 'torch') ? 5 : 6;
+    if (lane.stage > maxStage) {
+      registerMiss(laneKey);
+      lane.stage = 0;
+    }
+  }
+
+  // Priority 2 — spawn cooldown ticks every beat, regardless of enemy movement.
+  GameState.spawnCooldown--;
+
+  if (GameState.spawnCooldown <= 0) {
+    for (let i = 0; i < LANE_ORDER.length; i++) {
+      const spawnLaneKey = LANE_ORDER[currentLaneCheckIndex];
+      const spawnLane = GameState.lanes[spawnLaneKey];
+      currentLaneCheckIndex = (currentLaneCheckIndex + 1) % LANE_ORDER.length;
+
+      if (GameState.activeLanes.includes(spawnLaneKey) && spawnLane.stage === 0 && !spawnLane.falling) {
+        spawnLane.stage = 1;
+        // Cooldown shrinks as score rises: 2 beats at 0pts → 1 beat at 200+pts
+        GameState.spawnCooldown = Math.max(1, 2 - Math.floor(GameState.score / 200));
+        break;
+      }
+    }
+  }
 }
 
 // --------------------
@@ -184,43 +211,26 @@ export function attack() {
 
   if (!lane) return false;
 
+  const hitPoints = GameState.chanceTime ? 5 : 2;
+
   // Runner: Allow hitting at stage 5 or 6 (climbing stages)
   if (lane.type === "runner" && (lane.stage === 5 || lane.stage === 6)) {
-    // Trigger fall animation
     lane.falling = true;
-    lane.stage = 7; // Fall stage
+    lane.stage = 7; // fall stage
     lane.timer = 0;
-    GameState.score += 2;
+    GameState.score += hitPoints;
     GameState.totalHits++;
-    
-    // Unlock BR after first runner hit
-    if (GameState.totalHits === 1 && GameState.activeLanes.length === 1) {
-      GameState.activeLanes = ['BL', 'BR'];
-    }
-    
-    // Unlock torches after 5 runner hits
-    if (GameState.totalHits === 5 && GameState.activeLanes.length === 2) {
-      GameState.activeLanes = ['BL', 'BR', 'TL'];
-    }
-    
     checkBonus();
-    return true; // hit
+    return true;
   }
 
   // Torch: Only allow hitting at stage 5
   if (lane.type === "torch" && lane.stage === 5) {
     lane.stage = 0;
-    lane.timer = 0;
-    GameState.score += 2;
+    GameState.score += hitPoints;
     GameState.totalHits++;
-    
-    // Unlock TR after first torch hit
-    if (GameState.activeLanes.length === 3 && !GameState.activeLanes.includes('TR')) {
-      GameState.activeLanes = ['BL', 'BR', 'TL', 'TR'];
-    }
-    
     checkBonus();
-    return true; // hit
+    return true;
   }
 
   return false;
@@ -235,7 +245,13 @@ function checkBonus() {
       GameState.bonus[threshold] = true;
 
       if (GameState.misses > 0) {
+        // Clear one miss as consolation prize.
         GameState.misses--;
+      } else {
+        // Perfect play — trigger Chance Time (100–120 beats, matching the
+        // original SM510 cycle counter range).
+        GameState.chanceTime = true;
+        GameState.chanceTimeTicks = Math.floor(Math.random() * 21) + 100;
       }
     }
   });
@@ -248,12 +264,32 @@ function checkBonus() {
 function registerMiss(laneKey) {
   GameState.misses++;
 
+  // Mode A — Lane Shift: pick a NEW random lane to disable (must be different
+  // from the current one so the pattern always changes on every miss).
+  if (GameState.gameMode === 'A') {
+    const allLanes = ['TL', 'TR', 'BL', 'BR'];
+    let newDisabled;
+    do {
+      newDisabled = allLanes[Math.floor(Math.random() * 4)];
+    } while (newDisabled === GameState.disabledLane);
+    GameState.disabledLane = newDisabled;
+    GameState.activeLanes = allLanes.filter(l => l !== newDisabled);
+    // If there's an enemy in the newly disabled lane, reset it so the
+    // player isn't penalised for a lane that just went inactive.
+    const disabledLaneObj = GameState.lanes[newDisabled];
+    if (disabledLaneObj && disabledLaneObj.stage > 0) {
+      disabledLaneObj.stage = 0;
+      disabledLaneObj.timer = 0;
+      if (disabledLaneObj.falling !== undefined) disabledLaneObj.falling = false;
+    }
+  }
+
   // Trigger runner miss animation for BL and BR lanes
   if (laneKey === 'BL' || laneKey === 'BR') {
     GameState.lastMissPosition = laneKey;
     GameState.missAnimationTriggered = true;
   }
-  
+
   // Trigger torch miss animation for TL and TR lanes
   if (laneKey === 'TL' || laneKey === 'TR') {
     GameState.lastMissPosition = laneKey;
