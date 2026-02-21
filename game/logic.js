@@ -19,10 +19,7 @@ export const GameState = {
   chanceTime: false,        // Are we currently in Chance Time?
   chanceTimeTicks: 0,       // Remaining beats of Chance Time
 
-  bonus: {
-    200: false,
-    500: false
-  },
+  nextBonusThreshold: 200,
 
 
   lanes: {
@@ -35,8 +32,14 @@ export const GameState = {
 
 // G&W Global Clock — module-level, not per-lane
 let tickCounter = 0;
-let currentLaneCheckIndex = 0;  // round-robin for spawning
+const RUNNER_LANE_ORDER = ['BL', 'BR'];
+const TORCH_LANE_ORDER  = ['TR', 'TL'];
+let nextRunnerIndex  = 0;
+let nextTorchIndex   = 0;
+let nextSpawnIsRunner = true;   // alternates each successful spawn, decoupled from beat clock
 let beatType = 'runner';        // alternates 'runner' | 'torch' each beat
+let gameOverTimer = null;       // cancelable timeout for GAMEOVER scene transition
+let patternIndex = 0;           // Game A: sequential disabled-lane cycle index
 const LANE_ORDER = ['TL', 'TR', 'BL', 'BR'];
 const FALL_DURATION = 30; // frames for fall animation
 
@@ -46,21 +49,18 @@ function getFramesPerBeat(score, mode) {
   const baseSpeed = (mode === "A") ? 0 : 2;
   const tier = Math.floor(score / 100) + baseSpeed;
   const speedTable = [
-    48, // 0–99   pts  (slowest)
-    43, // 100–199
-    38, // 200–299
-    34, // 300–399
-    29, // 400–499
-    24, // 500–599
-    22, // 600–699
-    19, // 700–799
-    17, // 800–899
-    14  // 900+         (fastest)
+    48, 43, 38, 34, 29, 24, 22, 19, 17, 14
   ];
-  return speedTable[Math.min(tier, speedTable.length - 1)];
+  const base = speedTable[Math.min(tier, speedTable.length - 1)];
+  const ramp = Math.floor((score % 100) / 10); // 0–9, resets at each 100-pt boundary
+  return Math.max(10, base - ramp); // floor at 10 frames to prevent impossibly fast speeds
 }
 
 export function startGame(mode) {
+  if (gameOverTimer) {
+    clearTimeout(gameOverTimer);
+    gameOverTimer = null;
+  }
   GameState.gameMode = mode;
   GameState.scene = "PLAYING";
   GameState.score = 0;
@@ -69,15 +69,14 @@ export function startGame(mode) {
   GameState.totalHits = 0;
 
   // --- Authentic lane rules ---
-  const allLanes = ['TL', 'TR', 'BL', 'BR'];
   if (mode === 'A') {
-    // Triple-Lane Rule: exactly 3 of 4 lanes active; pick one random lane to disable.
-    GameState.disabledLane = allLanes[Math.floor(Math.random() * 4)];
-    GameState.activeLanes = allLanes.filter(l => l !== GameState.disabledLane);
+    patternIndex = Math.floor(Math.random() * 4);
+    GameState.disabledLane = LANE_ORDER[patternIndex];
+    GameState.activeLanes = LANE_ORDER.filter(l => l !== GameState.disabledLane);
   } else {
     // Game B: all 4 lanes active 100% of the time.
     GameState.disabledLane = null;
-    GameState.activeLanes = [...allLanes];
+    GameState.activeLanes = [...LANE_ORDER];
   }
 
   // Reset Chance Time
@@ -93,8 +92,7 @@ export function startGame(mode) {
     }
   });
 
-  GameState.bonus[200] = false;
-  GameState.bonus[500] = false;
+  GameState.nextBonusThreshold = 200;
 
   // Reset miss animation flags
   GameState.missAnimationTriggered = false;
@@ -103,9 +101,12 @@ export function startGame(mode) {
 
   // Reset G&W global clock
   tickCounter = 0;
-  currentLaneCheckIndex = 0;
+  nextRunnerIndex   = 0;
+  nextTorchIndex    = 0;
+  nextSpawnIsRunner = true;
   beatType = 'runner';
   GameState.spawnCooldown = 1;
+  // patternIndex already set above during lane init for mode A
 }
 
 export function returnToTitle() {
@@ -135,20 +136,20 @@ export function updateGame() {
     }
   });
 
-  // --- G&W Global Heartbeat ---
-  tickCounter++;
-  const framesPerBeat = getFramesPerBeat(GameState.score, GameState.gameMode);
-
-  if (tickCounter < framesPerBeat) return;
-  tickCounter = 0;
-
-  // Chance Time countdown — one beat at a time.
+  // Chance Time countdown — runs every frame for accurate duration.
   if (GameState.chanceTime) {
     GameState.chanceTimeTicks--;
     if (GameState.chanceTimeTicks <= 0) {
       GameState.chanceTime = false;
     }
   }
+
+  // --- G&W Global Heartbeat ---
+  tickCounter++;
+  const framesPerBeat = getFramesPerBeat(GameState.score, GameState.gameMode);
+
+  if (tickCounter < framesPerBeat) return;
+  tickCounter = 0;
 
   // ALTERNATING BEAT RULE:
   // Even beats  → all runners (BL, BR) advance one step together.
@@ -177,18 +178,34 @@ export function updateGame() {
   GameState.spawnCooldown--;
 
   if (GameState.spawnCooldown <= 0) {
-    for (let i = 0; i < LANE_ORDER.length; i++) {
-      const spawnLaneKey = LANE_ORDER[currentLaneCheckIndex];
-      const spawnLane = GameState.lanes[spawnLaneKey];
-      currentLaneCheckIndex = (currentLaneCheckIndex + 1) % LANE_ORDER.length;
+    // Alternate runner/torch spawns independently of beat clock.
+    // Scan up to all lanes of the chosen type so occupied lanes don't cause
+    // a permanent deadlock (preserves deterministic ordering within each type).
+    const laneOrder = nextSpawnIsRunner ? RUNNER_LANE_ORDER : TORCH_LANE_ORDER;
+    const startIdx  = nextSpawnIsRunner ? nextRunnerIndex   : nextTorchIndex;
 
-      if (GameState.activeLanes.includes(spawnLaneKey) && spawnLane.stage === 0 && !spawnLane.falling) {
+    for (let attempt = 0; attempt < laneOrder.length; attempt++) {
+      const tryIdx       = (startIdx + attempt) % laneOrder.length;
+      const spawnLaneKey = laneOrder[tryIdx];
+      const spawnLane    = GameState.lanes[spawnLaneKey];
+
+      if (
+        GameState.activeLanes.includes(spawnLaneKey) &&
+        spawnLane.stage === 0 &&
+        !spawnLane.falling
+      ) {
         spawnLane.stage = 1;
+        const nextIdx = (tryIdx + 1) % laneOrder.length;
+        if (nextSpawnIsRunner) nextRunnerIndex = nextIdx;
+        else                   nextTorchIndex  = nextIdx;
+        nextSpawnIsRunner = !nextSpawnIsRunner;
         // Cooldown shrinks as score rises: 2 beats at 0pts → 1 beat at 200+pts
         GameState.spawnCooldown = Math.max(1, 2 - Math.floor(GameState.score / 200));
         break;
       }
     }
+    // If all lanes of this type are occupied/disabled, keep cooldown at 0
+    // and retry next beat (no flip — same type retried to stay balanced).
   }
 }
 
@@ -237,24 +254,23 @@ export function attack() {
 }
 
 function checkBonus() {
-  [200, 500].forEach((threshold) => {
-    if (
-      GameState.score >= threshold &&
-      !GameState.bonus[threshold]
-    ) {
-      GameState.bonus[threshold] = true;
-
-      if (GameState.misses > 0) {
-        // Clear one miss as consolation prize.
-        GameState.misses--;
-      } else {
-        // Perfect play — trigger Chance Time (100–120 beats, matching the
-        // original SM510 cycle counter range).
-        GameState.chanceTime = true;
-        GameState.chanceTimeTicks = Math.floor(Math.random() * 21) + 100;
-      }
+  if (GameState.score >= GameState.nextBonusThreshold) {
+    // Advance threshold: 200 → 500 → 1500 → 2500 → 3500 → ...
+    if (GameState.nextBonusThreshold === 200) {
+      GameState.nextBonusThreshold = 500;
+    } else {
+      GameState.nextBonusThreshold += 1000;
     }
-  });
+
+    if (GameState.misses > 0) {
+      // Clear one miss as consolation prize.
+      GameState.misses--;
+    } else {
+      // Perfect play — trigger Chance Time (30–50 s at 60fps = 1800–3000 frames).
+      GameState.chanceTime = true;
+      GameState.chanceTimeTicks = Math.floor(Math.random() * 1200) + 1800;
+    }
+  }
 }
 
 
@@ -264,16 +280,12 @@ function checkBonus() {
 function registerMiss(laneKey) {
   GameState.misses++;
 
-  // Mode A — Lane Shift: pick a NEW random lane to disable (must be different
-  // from the current one so the pattern always changes on every miss).
+  // Mode A — Lane Shift: advance to the next lane in the sequential cycle.
   if (GameState.gameMode === 'A') {
-    const allLanes = ['TL', 'TR', 'BL', 'BR'];
-    let newDisabled;
-    do {
-      newDisabled = allLanes[Math.floor(Math.random() * 4)];
-    } while (newDisabled === GameState.disabledLane);
+    patternIndex = (patternIndex + 1) % 4;
+    const newDisabled = LANE_ORDER[patternIndex];
     GameState.disabledLane = newDisabled;
-    GameState.activeLanes = allLanes.filter(l => l !== newDisabled);
+    GameState.activeLanes = LANE_ORDER.filter(l => l !== newDisabled);
     // If there's an enemy in the newly disabled lane, reset it so the
     // player isn't penalised for a lane that just went inactive.
     const disabledLaneObj = GameState.lanes[newDisabled];
@@ -300,8 +312,9 @@ function registerMiss(laneKey) {
     GameState.gameOver = true;
     // Transition to GAMEOVER scene after a delay to let animation finish
     // All miss animations are 5 seconds
-    setTimeout(() => {
+    gameOverTimer = setTimeout(() => {
       GameState.scene = 'GAMEOVER';
+      gameOverTimer = null;
     }, 5000);
   }
 }

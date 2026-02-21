@@ -426,6 +426,7 @@
     // Touch Controls - Simulate keyboard events
     import { unlockAudio } from './audio/sound.js';
     import { startGame, setGameMode } from './game/logic.js';
+    import { resetAnimations } from './render/svgRenderer.js';
     
     document.addEventListener('DOMContentLoaded', () => {
       const PORTRAIT_SAFE_MARGIN = 24;
@@ -475,7 +476,8 @@
           gameModeButtons.forEach(btn => btn.classList.remove('selected'));
           button.classList.add('selected');
           
-          // Start game with selected mode
+          // Reset renderer and start fresh
+          resetAnimations();
           setGameMode(mode);
           startGame(mode);
         });
