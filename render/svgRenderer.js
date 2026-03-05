@@ -1015,6 +1015,12 @@ export function drawScore(score) {
     if ((i === 0 && score < 100) || (i === 1 && score < 10)) {
       if (digitGroup) {
         digitGroup.setAttribute('visibility', 'hidden');
+        // Explicitly clear each segment so child visibility="visible" attributes
+        // don't bleed through the hidden parent group in SVG.
+        ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach(seg => {
+          const el = document.getElementById(`digit-${i}-${seg}`);
+          if (el) el.setAttribute('visibility', 'hidden');
+        });
       }
       continue;
     }
