@@ -294,6 +294,40 @@ export async function initSVG() {
 }
 
 /**
+ * Reset all animation state — call this when starting a new game so that
+ * in-progress miss/fire animations don't block the new game loop.
+ */
+export function resetAnimations() {
+  attackFlashTimer = 0;
+  attackAnimationTimer = 0;
+  currentAttackPosition = null;
+  hitAnimationTimer = 0;
+  currentHitPosition = null;
+
+  smokeAnimations.TL = { active: false, frame: 0, timer: 0 };
+  smokeAnimations.TR = { active: false, frame: 0, timer: 0 };
+
+  missAnimationActive = false;
+  missAnimationTimer = 0;
+  missAnimationPosition = null;
+
+  torchMissAnimationActive = false;
+  torchMissAnimationTimer = 0;
+  torchMissAnimationPosition = null;
+
+  topFireActive = false;
+  topFireTimer = 0;
+  topFireCycle = 0;
+
+  previousStages.TL = 0;
+  previousStages.TR = 0;
+  previousStages.BL = 0;
+  previousStages.BR = 0;
+
+  clearDynamicElements();
+}
+
+/**
  * Helper function to toggle SVG element visibility
  */
 function setSVGVisibility(id, visible) {
@@ -379,6 +413,8 @@ function clearDynamicElements() {
 export function drawTitleScreen(mode) {
   clearDynamicElements();
   setSVGVisibility('gameOverScreen', false);
+  drawScore(0);
+  drawFires(0);
   // Show static layout with player at default position
   setSVGVisibility('player_TL', true);
 }
