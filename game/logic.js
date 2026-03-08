@@ -1,219 +1,319 @@
-// game/logic.js
+// game/logic.js — Fire Attack rewrite (spec-based architecture)
+
+const LANE_ORDER = ['TL', 'TR', 'BL', 'BR'];
+
+const LANE_DEFS = {
+  BL: { laneId: 'BL', type: 'RUNNER', patternGroup: 0, maxStepIndex: 6, maxSimultaneous: 1 },
+  BR: { laneId: 'BR', type: 'RUNNER', patternGroup: 1, maxStepIndex: 6, maxSimultaneous: 1 },
+  TL: { laneId: 'TL', type: 'TORCH',  patternGroup: 2, maxStepIndex: 5, maxSimultaneous: 1 },
+  TR: { laneId: 'TR', type: 'TORCH',  patternGroup: 3, maxStepIndex: 5, maxSimultaneous: 1 },
+};
+
+const SPAWN_CYCLE = [
+  { kind: 'SPAWN', laneId: 'BL' },
+  { kind: 'NONE' },
+  { kind: 'SPAWN', laneId: 'TR' },
+  { kind: 'NONE' },
+  { kind: 'SPAWN', laneId: 'BR' },
+  { kind: 'NONE' },
+  { kind: 'SPAWN', laneId: 'TL' },
+  { kind: 'NONE' },
+];
+
+const MICROSTEP_BASE = [0.25, 0.245, 0.24, 0.235, 0.23, 0.225, 0.22, 0.215, 0.21, 0.205];
+const SPAWN_BASE     = [0.9,  0.86,  0.82, 0.79,  0.76, 0.73,  0.70, 0.68,  0.66, 0.64];
+
+const CHANCE_TIME_DURATION   = 40.0;
+const FALL_DURATION = 30;
+
+let gameOverTimer = null;
+
+// ---------------------------------------------------------------------------
+// Timing helpers
+// ---------------------------------------------------------------------------
+
+function currentMicrostepInterval(score, mode) {
+  const bandOffset = (mode === 'B') ? 2 : 0;
+  const band = Math.min(Math.floor(score / 100) + bandOffset, MICROSTEP_BASE.length - 1);
+  const inBand = score % 100;
+  return MICROSTEP_BASE[band] - (0.04 * (inBand / 99));
+}
+
+function currentSpawnInterval(score, mode) {
+  const bandOffset = (mode === 'B') ? 2 : 0;
+  const band = Math.min(Math.floor(score / 100) + bandOffset, SPAWN_BASE.length - 1);
+  const inBand = score % 100;
+  return SPAWN_BASE[band] - (0.12 * (inBand / 99));
+}
+
+// ---------------------------------------------------------------------------
+// GameState
+// ---------------------------------------------------------------------------
 
 export const GameState = {
-  scene: "TITLE", // TITLE | PLAYING | GAMEOVER
-  gameMode: "A", // "A" or "B"
-  currentPosition: "TL",
+  scene: 'TITLE',
+  gameMode: 'A',
+  currentPosition: 'TL',
   score: 0,
   misses: 0,
   gameOver: false,
-  totalHits: 0,  // Track total successful hits
-  activeLanes: ['TL', 'TR', 'BL', 'BR'],
-  disabledLane: null,   // Mode A: the one lane currently inactive
-  missAnimationTriggered: false,  // Flag to trigger miss animation
-  torchMissAnimationTriggered: false,  // Flag to trigger torch miss animation
-  lastMissPosition: null,  // Track where miss occurred
-  spawnCooldown: 4,  // Beats to wait before next spawn attempt
 
-  // Chance Time
-  chanceTime: false,        // Are we currently in Chance Time?
-  chanceTimeTicks: 0,       // Remaining beats of Chance Time
+  patternIndex: 0,
 
-  nextBonusThreshold: 200,
+  activeThreats: [],
+  nextThreatId: 1,
 
+  schedulerCursor: -1,
+  spawnCycleIndex: 0,
+
+  nextSpawnTime: 0,
+  nextMicrostepTime: 0,
+  chanceTimeUntil: 0,
+  chanceTime: false,
+
+  passedBonus200: false,
+  passedBonus500: false,
+
+  missAnimationTriggered: false,
+  torchMissAnimationTriggered: false,
+  lastMissPosition: null,
 
   lanes: {
-    TL: { type: "torch", stage: 0, timer: 0 },
-    TR: { type: "torch", stage: 0, timer: 0 },
-    BL: { type: "runner", stage: 0, timer: 0, falling: false },
-    BR: { type: "runner", stage: 0, timer: 0, falling: false }
-  }
+    TL: { type: 'torch',  stage: 0, timer: 0, falling: false },
+    TR: { type: 'torch',  stage: 0, timer: 0, falling: false },
+    BL: { type: 'runner', stage: 0, timer: 0, falling: false },
+    BR: { type: 'runner', stage: 0, timer: 0, falling: false },
+  },
 };
 
-// G&W Global Clock — module-level, not per-lane
-let tickCounter = 0;
-const RUNNER_LANE_ORDER = ['BL', 'BR'];
-const TORCH_LANE_ORDER  = ['TR', 'TL'];
-let nextRunnerIndex  = 0;
-let nextTorchIndex   = 0;
-let nextSpawnIsRunner = true;   // alternates each successful spawn, decoupled from beat clock
-let beatType = 'runner';        // alternates 'runner' | 'torch' each beat
-let gameOverTimer = null;       // cancelable timeout for GAMEOVER scene transition
-let patternIndex = 0;           // Game A: sequential disabled-lane cycle index
-const LANE_ORDER = ['TL', 'TR', 'BL', 'BR'];
-const FALL_DURATION = 30; // frames for fall animation
+// ---------------------------------------------------------------------------
+// Pattern helpers
+// ---------------------------------------------------------------------------
 
-// 100-point speed tiers (frames to wait between beats at 60 fps).
-// Mode B starts 2 tiers higher than Mode A, matching the original.
-function getFramesPerBeat(score, mode) {
-  const baseSpeed = (mode === "A") ? 0 : 2;
-  const tier = Math.floor(score / 100) + baseSpeed;
-  const speedTable = [
-    48, 43, 38, 34, 29, 24, 22, 19, 17, 14
-  ];
-  const base = speedTable[Math.min(tier, speedTable.length - 1)];
-  const ramp = Math.floor((score % 100) / 10); // 0–9, resets at each 100-pt boundary
-  return Math.max(10, base - ramp); // floor at 10 frames to prevent impossibly fast speeds
+function isPatternEnabled(patternGroup) {
+  if (GameState.gameMode === 'B') return true;
+  return patternGroup !== GameState.patternIndex;
 }
 
-export function startGame(mode) {
-  if (gameOverTimer) {
-    clearTimeout(gameOverTimer);
-    gameOverTimer = null;
+function rotatePatternAfterMiss() {
+  GameState.patternIndex = (GameState.patternIndex + 1) % 4;
+}
+
+// ---------------------------------------------------------------------------
+// Spawn logic
+// ---------------------------------------------------------------------------
+
+function trySpawnFromCycle(now) {
+  const intent = SPAWN_CYCLE[GameState.spawnCycleIndex];
+  GameState.spawnCycleIndex = (GameState.spawnCycleIndex + 1) % SPAWN_CYCLE.length;
+
+  if (intent.kind === 'NONE' || !intent.laneId) return;
+
+  const lane = LANE_DEFS[intent.laneId];
+  if (!lane) return;
+
+  if (!isPatternEnabled(lane.patternGroup)) return;
+
+  const activeInLane = GameState.activeThreats.filter(
+    t => t.active && t.laneId === lane.laneId
+  ).length;
+  if (activeInLane >= lane.maxSimultaneous) return;
+
+  const threat = {
+    id: GameState.nextThreatId++,
+    type: lane.type,
+    laneId: lane.laneId,
+    stepIndex: 1,
+    maxStepIndex: lane.maxStepIndex,
+    active: true,
+  };
+
+  GameState.activeThreats.push(threat);
+}
+
+// ---------------------------------------------------------------------------
+// Micro-step scheduler
+// ---------------------------------------------------------------------------
+
+function pickNextThreatIndex() {
+  const threats = GameState.activeThreats;
+  if (threats.length === 0) return -1;
+
+  for (let offset = 1; offset <= threats.length; offset++) {
+    const idx = (GameState.schedulerCursor + offset) % threats.length;
+    if (threats[idx].active) return idx;
   }
-  GameState.gameMode = mode;
-  GameState.scene = "PLAYING";
-  GameState.score = 0;
-  GameState.misses = 0;
-  GameState.gameOver = false;
-  GameState.totalHits = 0;
+  return -1;
+}
 
-  // --- Authentic lane rules ---
-  if (mode === 'A') {
-    patternIndex = Math.floor(Math.random() * 4);
-    GameState.disabledLane = LANE_ORDER[patternIndex];
-    GameState.activeLanes = LANE_ORDER.filter(l => l !== GameState.disabledLane);
-  } else {
-    // Game B: all 4 lanes active 100% of the time.
-    GameState.disabledLane = null;
-    GameState.activeLanes = [...LANE_ORDER];
+function stepNextThreat(now) {
+  if (GameState.activeThreats.length === 0) return;
+
+  const idx = pickNextThreatIndex();
+  if (idx < 0) return;
+
+  const threat = GameState.activeThreats[idx];
+  if (!threat.active) return;
+
+  GameState.schedulerCursor = idx;
+  threat.stepIndex += 1;
+
+  if (threat.stepIndex > threat.maxStepIndex) {
+    registerMiss(threat.laneId);
+    threat.active = false;
+  }
+}
+
+function cleanupInactiveThreats() {
+  GameState.activeThreats = GameState.activeThreats.filter(t => t.active);
+  if (GameState.schedulerCursor >= GameState.activeThreats.length) {
+    GameState.schedulerCursor = Math.max(-1, GameState.activeThreats.length - 1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Miss handling and bonus
+// ---------------------------------------------------------------------------
+
+function registerMiss(laneKey) {
+  GameState.misses++;
+
+  if (laneKey === 'BL' || laneKey === 'BR') {
+    GameState.lastMissPosition = laneKey;
+    GameState.missAnimationTriggered = true;
+  }
+  if (laneKey === 'TL' || laneKey === 'TR') {
+    GameState.lastMissPosition = laneKey;
+    GameState.torchMissAnimationTriggered = true;
   }
 
-  // Reset Chance Time
-  GameState.chanceTime = false;
-  GameState.chanceTimeTicks = 0;
+  if (GameState.misses >= 3) {
+    GameState.gameOver = true;
+    gameOverTimer = setTimeout(() => {
+      GameState.scene = 'GAMEOVER';
+      gameOverTimer = null;
+    }, 5000);
+    return;
+  }
 
-  Object.keys(GameState.lanes).forEach(key => {
-    const lane = GameState.lanes[key];
-    lane.stage = 0;
-    lane.timer = 0;
-    if (lane.type === "runner") {
-      lane.falling = false;
+  if (GameState.gameMode === 'A') {
+    rotatePatternAfterMiss();
+    for (const t of GameState.activeThreats) {
+      if (t.active && LANE_DEFS[t.laneId].patternGroup === GameState.patternIndex) {
+        t.active = false;
+      }
     }
-  });
+  }
 
-  GameState.nextBonusThreshold = 200;
-
-  // Reset miss animation flags
-  GameState.missAnimationTriggered = false;
-  GameState.torchMissAnimationTriggered = false;
-  GameState.lastMissPosition = null;
-
-  // Reset G&W global clock
-  tickCounter = 0;
-  nextRunnerIndex   = 0;
-  nextTorchIndex    = 0;
-  nextSpawnIsRunner = true;
-  beatType = 'runner';
-  GameState.spawnCooldown = 1;
-  // patternIndex already set above during lane init for mode A
+  for (const t of GameState.activeThreats) {
+    t.active = false;
+  }
+  cleanupInactiveThreats();
 }
 
-export function returnToTitle() {
-  GameState.scene = "TITLE";
-  // Reset miss animation flags
-  GameState.missAnimationTriggered = false;
-  GameState.torchMissAnimationTriggered = false;
-  GameState.lastMissPosition = null;
+function checkBonus(now) {
+  if (!GameState.passedBonus200 && GameState.score >= 200) {
+    GameState.passedBonus200 = true;
+    triggerBonusCheckpoint(now);
+  }
+  if (!GameState.passedBonus500 && GameState.score >= 500) {
+    GameState.passedBonus500 = true;
+    triggerBonusCheckpoint(now);
+  }
 }
 
-// --------------------
-// UPDATE
-// --------------------
-export function updateGame() {
-  if (GameState.scene !== "PLAYING" || GameState.gameOver) return;
+function triggerBonusCheckpoint(now) {
+  if (GameState.misses > 0) {
+    GameState.misses = 0;
+    return;
+  }
+  GameState.chanceTime = true;
+  GameState.chanceTimeUntil = now + CHANCE_TIME_DURATION;
+}
 
-  // Fall animations run every frame, independent of the beat clock.
-  Object.keys(GameState.lanes).forEach((key) => {
+// ---------------------------------------------------------------------------
+// Renderer bridge
+// ---------------------------------------------------------------------------
+
+function updateLaneStages() {
+  for (const key of LANE_ORDER) {
     const lane = GameState.lanes[key];
-    if (lane.type === "runner" && lane.falling) {
+    if (lane.falling) {
       lane.timer++;
       if (lane.timer > FALL_DURATION) {
         lane.stage = 0;
         lane.timer = 0;
         lane.falling = false;
       }
+      continue;
     }
-  });
-
-  // Chance Time countdown — runs every frame for accurate duration.
-  if (GameState.chanceTime) {
-    GameState.chanceTimeTicks--;
-    if (GameState.chanceTimeTicks <= 0) {
-      GameState.chanceTime = false;
-    }
+    lane.stage = 0;
   }
 
-  // --- G&W Global Heartbeat ---
-  tickCounter++;
-  const framesPerBeat = getFramesPerBeat(GameState.score, GameState.gameMode);
-
-  if (tickCounter < framesPerBeat) return;
-  tickCounter = 0;
-
-  // ALTERNATING BEAT RULE:
-  // Even beats  → all runners (BL, BR) advance one step together.
-  // Odd beats   → all torches (TL, TR) advance one step together.
-  // This guarantees two runners can never land on the same hittable stage
-  // at the same time (they move in lockstep, spawn offset keeps them apart),
-  // and torches/runners are always on opposite beats so they never collide.
-
-  const typeThisBeat = beatType;
-  beatType = (beatType === 'runner') ? 'torch' : 'runner'; // flip for next beat
-
-  for (const laneKey of LANE_ORDER) {
-    const lane = GameState.lanes[laneKey];
-    if (lane.type !== typeThisBeat) continue;
-    if (lane.stage === 0 || lane.falling) continue;
-
-    lane.stage++;
-    const maxStage = (lane.type === 'torch') ? 5 : 6;
-    if (lane.stage > maxStage) {
-      registerMiss(laneKey);
-      lane.stage = 0;
+  for (const threat of GameState.activeThreats) {
+    if (!threat.active) continue;
+    const lane = GameState.lanes[threat.laneId];
+    if (lane && !lane.falling) {
+      lane.stage = threat.stepIndex;
     }
-  }
-
-  // Priority 2 — spawn cooldown ticks every beat, regardless of enemy movement.
-  GameState.spawnCooldown--;
-
-  if (GameState.spawnCooldown <= 0) {
-    // Alternate runner/torch spawns independently of beat clock.
-    // Scan up to all lanes of the chosen type so occupied lanes don't cause
-    // a permanent deadlock (preserves deterministic ordering within each type).
-    const laneOrder = nextSpawnIsRunner ? RUNNER_LANE_ORDER : TORCH_LANE_ORDER;
-    const startIdx  = nextSpawnIsRunner ? nextRunnerIndex   : nextTorchIndex;
-
-    for (let attempt = 0; attempt < laneOrder.length; attempt++) {
-      const tryIdx       = (startIdx + attempt) % laneOrder.length;
-      const spawnLaneKey = laneOrder[tryIdx];
-      const spawnLane    = GameState.lanes[spawnLaneKey];
-
-      if (
-        GameState.activeLanes.includes(spawnLaneKey) &&
-        spawnLane.stage === 0 &&
-        !spawnLane.falling
-      ) {
-        spawnLane.stage = 1;
-        const nextIdx = (tryIdx + 1) % laneOrder.length;
-        if (nextSpawnIsRunner) nextRunnerIndex = nextIdx;
-        else                   nextTorchIndex  = nextIdx;
-        nextSpawnIsRunner = !nextSpawnIsRunner;
-        // Cooldown shrinks as score rises: 2 beats at 0pts → 1 beat at 200+pts
-        GameState.spawnCooldown = Math.max(1, 2 - Math.floor(GameState.score / 200));
-        break;
-      }
-    }
-    // If all lanes of this type are occupied/disabled, keep cooldown at 0
-    // and retry next beat (no flip — same type retried to stay balanced).
   }
 }
 
-// --------------------
-// INPUT ACTIONS
-// --------------------
+// ---------------------------------------------------------------------------
+// Exported functions
+// ---------------------------------------------------------------------------
+
+export function startGame(mode) {
+  if (gameOverTimer) {
+    clearTimeout(gameOverTimer);
+    gameOverTimer = null;
+  }
+
+  const now = performance.now() / 1000;
+
+  GameState.gameMode = mode;
+  GameState.scene = 'PLAYING';
+  GameState.score = 0;
+  GameState.misses = 0;
+  GameState.gameOver = false;
+
+  GameState.patternIndex = (mode === 'A') ? Math.floor(Math.random() * 4) : 0;
+
+  GameState.activeThreats = [];
+  GameState.nextThreatId = 1;
+
+  GameState.schedulerCursor = -1;
+  GameState.spawnCycleIndex = 0;
+
+  GameState.nextSpawnTime = now + 0.5;
+  GameState.nextMicrostepTime = now + 0.25;
+  GameState.chanceTimeUntil = 0;
+  GameState.chanceTime = false;
+
+  GameState.passedBonus200 = false;
+  GameState.passedBonus500 = false;
+
+  GameState.missAnimationTriggered = false;
+  GameState.torchMissAnimationTriggered = false;
+  GameState.lastMissPosition = null;
+
+  for (const key of LANE_ORDER) {
+    const lane = GameState.lanes[key];
+    lane.stage = 0;
+    lane.timer = 0;
+    if (lane.falling !== undefined) lane.falling = false;
+  }
+}
+
+export function returnToTitle() {
+  GameState.scene = 'TITLE';
+  GameState.missAnimationTriggered = false;
+  GameState.torchMissAnimationTriggered = false;
+  GameState.lastMissPosition = null;
+}
+
 export function setGameMode(mode) {
-  if (mode === "A" || mode === "B") {
+  if (mode === 'A' || mode === 'B') {
     GameState.gameMode = mode;
   }
 }
@@ -224,98 +324,61 @@ export function movePlayer(pos) {
 
 export function attack() {
   const pos = GameState.currentPosition;
-  const lane = GameState.lanes[pos];
+  const laneDef = LANE_DEFS[pos];
+  if (!laneDef) return false;
 
-  if (!lane) return false;
-
+  const now = performance.now() / 1000;
   const hitPoints = GameState.chanceTime ? 5 : 2;
 
-  // Runner: Allow hitting at stage 5 or 6 (climbing stages)
-  if (lane.type === "runner" && (lane.stage === 5 || lane.stage === 6)) {
-    lane.falling = true;
-    lane.stage = 7; // fall stage
-    lane.timer = 0;
-    GameState.score += hitPoints;
-    GameState.totalHits++;
-    checkBonus();
-    return true;
-  }
+  for (const threat of GameState.activeThreats) {
+    if (!threat.active || threat.laneId !== pos) continue;
 
-  // Torch: Only allow hitting at stage 5
-  if (lane.type === "torch" && lane.stage === 5) {
-    lane.stage = 0;
-    GameState.score += hitPoints;
-    GameState.totalHits++;
-    checkBonus();
-    return true;
+    if (threat.type === 'RUNNER' && (threat.stepIndex === 5 || threat.stepIndex === 6)) {
+      threat.active = false;
+      GameState.lanes[pos].falling = true;
+      GameState.lanes[pos].stage = 7;
+      GameState.lanes[pos].timer = 0;
+      GameState.score += hitPoints;
+      checkBonus(now);
+      return true;
+    }
+
+    if (threat.type === 'TORCH' && threat.stepIndex === 5) {
+      threat.active = false;
+      GameState.score += hitPoints;
+      checkBonus(now);
+      return true;
+    }
   }
 
   return false;
 }
 
-function checkBonus() {
-  if (GameState.score >= GameState.nextBonusThreshold) {
-    // Advance threshold: 200 → 500 → 1500 → 2500 → 3500 → ...
-    if (GameState.nextBonusThreshold === 200) {
-      GameState.nextBonusThreshold = 500;
-    } else {
-      GameState.nextBonusThreshold += 1000;
-    }
-
-    if (GameState.misses > 0) {
-      // Clear one miss as consolation prize.
-      GameState.misses--;
-    } else {
-      // Perfect play — trigger Chance Time (30–50 s at 60fps = 1800–3000 frames).
-      GameState.chanceTime = true;
-      GameState.chanceTimeTicks = Math.floor(Math.random() * 1200) + 1800;
-    }
+export function updateGame() {
+  if (GameState.scene !== 'PLAYING' || GameState.gameOver) {
+    updateLaneStages();
+    return;
   }
+
+  const now = performance.now() / 1000;
+
+  // Chance Time expiry
+  if (GameState.chanceTime && now >= GameState.chanceTimeUntil) {
+    GameState.chanceTime = false;
+  }
+
+  // Spawn
+  if (now >= GameState.nextSpawnTime) {
+    trySpawnFromCycle(now);
+    GameState.nextSpawnTime = now + currentSpawnInterval(GameState.score, GameState.gameMode);
+  }
+
+  // Micro-step
+  if (now >= GameState.nextMicrostepTime) {
+    stepNextThreat(now);
+    GameState.nextMicrostepTime = now + currentMicrostepInterval(GameState.score, GameState.gameMode);
+  }
+
+  cleanupInactiveThreats();
+  updateLaneStages();
 }
-
-
-// --------------------
-// MISS / GAME OVER
-// --------------------
-function registerMiss(laneKey) {
-  GameState.misses++;
-
-  // Mode A — Lane Shift: advance to the next lane in the sequential cycle.
-  if (GameState.gameMode === 'A') {
-    patternIndex = (patternIndex + 1) % 4;
-    const newDisabled = LANE_ORDER[patternIndex];
-    GameState.disabledLane = newDisabled;
-    GameState.activeLanes = LANE_ORDER.filter(l => l !== newDisabled);
-    // If there's an enemy in the newly disabled lane, reset it so the
-    // player isn't penalised for a lane that just went inactive.
-    const disabledLaneObj = GameState.lanes[newDisabled];
-    if (disabledLaneObj && disabledLaneObj.stage > 0) {
-      disabledLaneObj.stage = 0;
-      disabledLaneObj.timer = 0;
-      if (disabledLaneObj.falling !== undefined) disabledLaneObj.falling = false;
-    }
-  }
-
-  // Trigger runner miss animation for BL and BR lanes
-  if (laneKey === 'BL' || laneKey === 'BR') {
-    GameState.lastMissPosition = laneKey;
-    GameState.missAnimationTriggered = true;
-  }
-
-  // Trigger torch miss animation for TL and TR lanes
-  if (laneKey === 'TL' || laneKey === 'TR') {
-    GameState.lastMissPosition = laneKey;
-    GameState.torchMissAnimationTriggered = true;
-  }
-
-  if (GameState.misses >= 3) {
-    GameState.gameOver = true;
-    // Transition to GAMEOVER scene after a delay to let animation finish
-    // All miss animations are 5 seconds
-    gameOverTimer = setTimeout(() => {
-      GameState.scene = 'GAMEOVER';
-      gameOverTimer = null;
-    }, 5000);
-  }
-}
-
