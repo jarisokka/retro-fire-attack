@@ -870,18 +870,18 @@ function updateRunnerMissAnimation() {
  * Stage 4: torch_2
  * Stage 5: torch_3 (hittable)
  */
-export function drawTorch(pos, stage) {
+export function drawTorch(pos, stage, activeStages = []) {
   // Determine side (TL uses left, TR uses right)
   const side = pos === 'TL' ? 'left' : 'right';
-  
+
   // Play flying torch sound on stage transitions 1-5 (throwing and flying)
   if (stage >= 1 && stage <= 5 && previousStages[pos] !== stage) {
     Sound.flyingTorch();
   }
-  
+
   // Always update previous stage
   previousStages[pos] = stage;
-  
+
   // Hide all torch attack sprites for this side first
   setSVGVisibility(`throw_${side}_body`, false);
   setSVGVisibility(`throw_${side}_hand_1`, false);
@@ -890,19 +890,22 @@ export function drawTorch(pos, stage) {
   setSVGVisibility(`torch_${side}_2`, false);
   setSVGVisibility(`torch_${side}_3`, false);
 
-  // Show the appropriate sprites based on stage
-  if (stage === 1) {
-    setSVGVisibility(`throw_${side}_body`, true);
-    setSVGVisibility(`throw_${side}_hand_1`, true);
-  } else if (stage === 2) {
-    setSVGVisibility(`throw_${side}_body`, true);
-    setSVGVisibility(`throw_${side}_hand_2`, true);
-  } else if (stage === 3) {
-    setSVGVisibility(`torch_${side}_1`, true);
-  } else if (stage === 4) {
-    setSVGVisibility(`torch_${side}_2`, true);
-  } else if (stage === 5) {
-    setSVGVisibility(`torch_${side}_3`, true);
+  // Show sprites for ALL active stages (LCD-style: multiple segments lit at once)
+  const stages = activeStages.length > 0 ? activeStages : (stage > 0 ? [stage] : []);
+  for (const s of stages) {
+    if (s === 1) {
+      setSVGVisibility(`throw_${side}_body`, true);
+      setSVGVisibility(`throw_${side}_hand_1`, true);
+    } else if (s === 2) {
+      setSVGVisibility(`throw_${side}_body`, true);
+      setSVGVisibility(`throw_${side}_hand_2`, true);
+    } else if (s === 3) {
+      setSVGVisibility(`torch_${side}_1`, true);
+    } else if (s === 4) {
+      setSVGVisibility(`torch_${side}_2`, true);
+    } else if (s === 5) {
+      setSVGVisibility(`torch_${side}_3`, true);
+    }
   }
 
   updateAttackFlash();
@@ -916,19 +919,18 @@ export function drawTorch(pos, stage) {
  * Stage 6: climbing (torso + hand_2) - hittable, causes miss if not hit
  * Stage 7: fall animation
  */
-export function drawRunner(pos, stage, falling) {
+export function drawRunner(pos, stage, falling, activeStages = [], hitEffectTimer = 0) {
   // Determine side (BL uses left, BR uses right)
   const side = pos === 'BL' ? 'left' : 'right';
-  
+
   // Play runner sound on stage transitions 1-5 (running + first climb)
-  // Don't play on stage 6 (climb_hand_2) or stage 7 (fall)
-  if (stage >= 1 && stage <= 5 && !falling && previousStages[pos] !== stage) {
+  if (stage >= 1 && stage <= 5 && !falling && hitEffectTimer <= 0 && previousStages[pos] !== stage) {
     Sound.runner();
   }
-  
+
   // Always update previous stage
   previousStages[pos] = stage;
-  
+
   // Hide all runner attack sprites for this side first
   setSVGVisibility(`runner_${side}_1`, false);
   setSVGVisibility(`runner_${side}_2`, false);
@@ -939,28 +941,29 @@ export function drawRunner(pos, stage, falling) {
   setSVGVisibility(`climb_${side}_hand_2`, false);
   setSVGVisibility(`runner_${side}_fall`, false);
 
-  // Show fall animation if falling
-  if (falling) {
+  // Show fall animation as overlay (does not hide other sprites)
+  if (hitEffectTimer > 0) {
     setSVGVisibility(`runner_${side}_fall`, true);
-    updateAttackFlash();
-    return;
   }
 
-  // Show the appropriate sprites based on stage
-  if (stage === 1) {
-    setSVGVisibility(`runner_${side}_1`, true);
-  } else if (stage === 2) {
-    setSVGVisibility(`runner_${side}_2`, true);
-  } else if (stage === 3) {
-    setSVGVisibility(`runner_${side}_3`, true);
-  } else if (stage === 4) {
-    setSVGVisibility(`runner_${side}_4`, true);
-  } else if (stage === 5) {
-    setSVGVisibility(`climb_${side}_torso`, true);
-    setSVGVisibility(`climb_${side}_hand_1`, true);
-  } else if (stage === 6) {
-    setSVGVisibility(`climb_${side}_torso`, true);
-    setSVGVisibility(`climb_${side}_hand_2`, true);
+  // Show sprites for ALL active stages (LCD-style: multiple segments lit at once)
+  const stages = activeStages.length > 0 ? activeStages : (stage > 0 ? [stage] : []);
+  for (const s of stages) {
+    if (s === 1) {
+      setSVGVisibility(`runner_${side}_1`, true);
+    } else if (s === 2) {
+      setSVGVisibility(`runner_${side}_2`, true);
+    } else if (s === 3) {
+      setSVGVisibility(`runner_${side}_3`, true);
+    } else if (s === 4) {
+      setSVGVisibility(`runner_${side}_4`, true);
+    } else if (s === 5) {
+      setSVGVisibility(`climb_${side}_torso`, true);
+      setSVGVisibility(`climb_${side}_hand_1`, true);
+    } else if (s === 6) {
+      setSVGVisibility(`climb_${side}_torso`, true);
+      setSVGVisibility(`climb_${side}_hand_2`, true);
+    }
   }
 
   updateAttackFlash();
@@ -1056,13 +1059,13 @@ export function render(gameState) {
   if (gameState.scene === 'PLAYING') {
     drawStaticLayout(gameState.currentPosition, gameState);
     
-    // Draw torches
-    drawTorch('TL', gameState.lanes.TL.stage);
-    drawTorch('TR', gameState.lanes.TR.stage);
-    
-    // Draw runners
-    drawRunner('BL', gameState.lanes.BL.stage, gameState.lanes.BL.falling);
-    drawRunner('BR', gameState.lanes.BR.stage, gameState.lanes.BR.falling);
+    // Draw torches (pass all active stages for LCD-style multi-sprite display)
+    drawTorch('TL', gameState.lanes.TL.stage, gameState.lanes.TL.activeStages);
+    drawTorch('TR', gameState.lanes.TR.stage, gameState.lanes.TR.activeStages);
+
+    // Draw runners (hitEffectTimer replaces falling for overlay behavior)
+    drawRunner('BL', gameState.lanes.BL.stage, false, gameState.lanes.BL.activeStages, gameState.lanes.BL.hitEffectTimer);
+    drawRunner('BR', gameState.lanes.BR.stage, false, gameState.lanes.BR.activeStages, gameState.lanes.BR.hitEffectTimer);
     
     // Draw fires
     drawFires(gameState.misses);

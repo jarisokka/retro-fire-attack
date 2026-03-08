@@ -1,14 +1,14 @@
-// game/logic.js — Fire Attack rewrite (spec-based architecture)
-
 const LANE_ORDER = ['TL', 'TR', 'BL', 'BR'];
 
+// Lanes = movement vectors
 const LANE_DEFS = {
-  BL: { laneId: 'BL', type: 'RUNNER', patternGroup: 0, maxStepIndex: 6, maxSimultaneous: 1 },
-  BR: { laneId: 'BR', type: 'RUNNER', patternGroup: 1, maxStepIndex: 6, maxSimultaneous: 1 },
-  TL: { laneId: 'TL', type: 'TORCH',  patternGroup: 2, maxStepIndex: 5, maxSimultaneous: 1 },
-  TR: { laneId: 'TR', type: 'TORCH',  patternGroup: 3, maxStepIndex: 5, maxSimultaneous: 1 },
+  BL: { laneId: 'BL', type: 'RUNNER', patternGroup: 0, maxStepIndex: 6, maxSimultaneous: 3 },
+  BR: { laneId: 'BR', type: 'RUNNER', patternGroup: 1, maxStepIndex: 6, maxSimultaneous: 3 },
+  TL: { laneId: 'TL', type: 'TORCH',  patternGroup: 2, maxStepIndex: 5, maxSimultaneous: 2 },
+  TR: { laneId: 'TR', type: 'TORCH',  patternGroup: 3, maxStepIndex: 5, maxSimultaneous: 2 },
 };
 
+// Spawn order: sparse first half, dense second half
 const SPAWN_CYCLE = [
   { kind: 'SPAWN', laneId: 'BL' },
   { kind: 'NONE' },
@@ -18,13 +18,24 @@ const SPAWN_CYCLE = [
   { kind: 'NONE' },
   { kind: 'SPAWN', laneId: 'TL' },
   { kind: 'NONE' },
+  { kind: 'SPAWN', laneId: 'BL' },
+  { kind: 'SPAWN', laneId: 'TR' },
+  { kind: 'SPAWN', laneId: 'BR' },
+  { kind: 'SPAWN', laneId: 'TL' },
 ];
 
-const MICROSTEP_BASE = [0.25, 0.245, 0.24, 0.235, 0.23, 0.225, 0.22, 0.215, 0.21, 0.205];
-const SPAWN_BASE     = [0.9,  0.86,  0.82, 0.79,  0.76, 0.73,  0.70, 0.68,  0.66, 0.64];
+// Service order: which lane gets moved on a tick
+// This is separate from spawn order.
+// Same-lane threats move together when their lane is serviced.
+const SERVICE_CYCLE_A = ['BL', 'TR', 'BR', 'TL'];
+const SERVICE_CYCLE_B = ['BL', 'TR', 'BR', 'TL'];
 
-const CHANCE_TIME_DURATION   = 40.0;
+// Single master tick interval, score-banded
+const TICK_BASE = [0.42, 0.40, 0.38, 0.36, 0.34, 0.32, 0.30, 0.28, 0.27, 0.26];
+
+const CHANCE_TIME_DURATION = 40.0;
 const FALL_DURATION = 30;
+const MISS_RECOVERY_DURATION = 1.8;
 
 let gameOverTimer = null;
 
@@ -32,18 +43,11 @@ let gameOverTimer = null;
 // Timing helpers
 // ---------------------------------------------------------------------------
 
-function currentMicrostepInterval(score, mode) {
-  const bandOffset = (mode === 'B') ? 2 : 0;
-  const band = Math.min(Math.floor(score / 100) + bandOffset, MICROSTEP_BASE.length - 1);
+function currentTickInterval(score, mode) {
+  const bandOffset = mode === 'B' ? 2 : 0;
+  const band = Math.min(Math.floor(score / 100) + bandOffset, TICK_BASE.length - 1);
   const inBand = score % 100;
-  return MICROSTEP_BASE[band] - (0.04 * (inBand / 99));
-}
-
-function currentSpawnInterval(score, mode) {
-  const bandOffset = (mode === 'B') ? 2 : 0;
-  const band = Math.min(Math.floor(score / 100) + bandOffset, SPAWN_BASE.length - 1);
-  const inBand = score % 100;
-  return SPAWN_BASE[band] - (0.12 * (inBand / 99));
+  return TICK_BASE[band] - (0.02 * (inBand / 99));
 }
 
 // ---------------------------------------------------------------------------
@@ -58,16 +62,22 @@ export const GameState = {
   misses: 0,
   gameOver: false,
 
+  // Main play flow
+  state: 'NORMAL', // NORMAL | MISS_RECOVERY
+
   patternIndex: 0,
 
   activeThreats: [],
   nextThreatId: 1,
 
-  schedulerCursor: -1,
   spawnCycleIndex: 0,
+  spawnGateCounter: 0,
+  serviceCycleIndex: 0,
 
-  nextSpawnTime: 0,
-  nextMicrostepTime: 0,
+  nextTickTime: 0,
+  lockedTickInterval: 0,
+  recoveryUntil: 0,
+
   chanceTimeUntil: 0,
   chanceTime: false,
 
@@ -79,10 +89,10 @@ export const GameState = {
   lastMissPosition: null,
 
   lanes: {
-    TL: { type: 'torch',  stage: 0, timer: 0, falling: false },
-    TR: { type: 'torch',  stage: 0, timer: 0, falling: false },
-    BL: { type: 'runner', stage: 0, timer: 0, falling: false },
-    BR: { type: 'runner', stage: 0, timer: 0, falling: false },
+    TL: { type: 'torch',  stage: 0, activeStages: [], hitEffectTimer: 0, hitEffectStage: 0 },
+    TR: { type: 'torch',  stage: 0, activeStages: [], hitEffectTimer: 0, hitEffectStage: 0 },
+    BL: { type: 'runner', stage: 0, activeStages: [], hitEffectTimer: 0, hitEffectStage: 0 },
+    BR: { type: 'runner', stage: 0, activeStages: [], hitEffectTimer: 0, hitEffectStage: 0 },
   },
 };
 
@@ -99,91 +109,120 @@ function rotatePatternAfterMiss() {
   GameState.patternIndex = (GameState.patternIndex + 1) % 4;
 }
 
+function getServiceCycle() {
+  return GameState.gameMode === 'B' ? SERVICE_CYCLE_B : SERVICE_CYCLE_A;
+}
+
 // ---------------------------------------------------------------------------
 // Spawn logic
 // ---------------------------------------------------------------------------
 
-function trySpawnFromCycle(now) {
+function canSpawnThisTick() {
+  const score = GameState.score;
+  if (score < 100) return (GameState.spawnGateCounter % 2) === 0;
+  return true;
+}
+
+function maybeSpawnOnThisTick() {
+  GameState.spawnGateCounter++;
+  if (!canSpawnThisTick()) return false;
+  return trySpawnFromCycle();
+}
+
+function currentLaneCapacity(laneId) {
+  const lane = LANE_DEFS[laneId];
+  if (!lane) return 1;
+
+  if (lane.type === 'TORCH') {
+    if (GameState.score < 200) return 1;
+    return 2;
+  }
+
+  if (GameState.score < 80) return 1;
+  if (GameState.score < 250) return 2;
+  return 3;
+}
+
+function trySpawnFromCycle() {
   const intent = SPAWN_CYCLE[GameState.spawnCycleIndex];
   GameState.spawnCycleIndex = (GameState.spawnCycleIndex + 1) % SPAWN_CYCLE.length;
 
-  if (intent.kind === 'NONE' || !intent.laneId) return;
+  if (intent.kind === 'NONE' || !intent.laneId) return false;
 
   const lane = LANE_DEFS[intent.laneId];
-  if (!lane) return;
+  if (!lane) return false;
 
-  if (!isPatternEnabled(lane.patternGroup)) return;
+  if (!isPatternEnabled(lane.patternGroup)) return false;
 
   const activeInLane = GameState.activeThreats.filter(
-    t => t.active && t.laneId === lane.laneId
+    (t) => t.active && t.laneId === lane.laneId
   ).length;
-  if (activeInLane >= lane.maxSimultaneous) return;
+
+  const laneCapacity = Math.min(lane.maxSimultaneous, currentLaneCapacity(lane.laneId));
+  if (activeInLane >= laneCapacity) return false;
 
   const threat = {
     id: GameState.nextThreatId++,
     type: lane.type,
     laneId: lane.laneId,
-    stepIndex: 1,
+    stepIndex: 0,
     maxStepIndex: lane.maxStepIndex,
     active: true,
   };
 
   GameState.activeThreats.push(threat);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
-// Micro-step scheduler
+// Lane stepping
 // ---------------------------------------------------------------------------
 
-function pickNextThreatIndex() {
-  const threats = GameState.activeThreats;
-  if (threats.length === 0) return -1;
+function stepLane(laneId) {
+  const laneThreats = GameState.activeThreats.filter(
+    (t) => t.active && t.laneId === laneId
+  );
 
-  for (let offset = 1; offset <= threats.length; offset++) {
-    const idx = (GameState.schedulerCursor + offset) % threats.length;
-    if (threats[idx].active) return idx;
+  if (laneThreats.length === 0) return false;
+
+  // Move all threats on this lane together
+  for (const threat of laneThreats) {
+    threat.stepIndex += 1;
   }
-  return -1;
-}
 
-function stepNextThreat(now) {
-  if (GameState.activeThreats.length === 0) return;
-
-  const idx = pickNextThreatIndex();
-  if (idx < 0) return;
-
-  const threat = GameState.activeThreats[idx];
-  if (!threat.active) return;
-
-  GameState.schedulerCursor = idx;
-  threat.stepIndex += 1;
-
-  if (threat.stepIndex > threat.maxStepIndex) {
-    registerMiss(threat.laneId);
-    threat.active = false;
+  // Check misses after all moved
+  for (const threat of laneThreats) {
+    if (threat.stepIndex > threat.maxStepIndex) {
+      threat.active = false;
+      registerMiss(threat.laneId);
+      return true;
+    }
   }
+
+  return true;
 }
 
 function cleanupInactiveThreats() {
-  GameState.activeThreats = GameState.activeThreats.filter(t => t.active);
-  if (GameState.schedulerCursor >= GameState.activeThreats.length) {
-    GameState.schedulerCursor = Math.max(-1, GameState.activeThreats.length - 1);
-  }
+  GameState.activeThreats = GameState.activeThreats.filter((t) => t.active);
 }
 
 // ---------------------------------------------------------------------------
 // Miss handling and bonus
 // ---------------------------------------------------------------------------
 
+function enterMissRecovery() {
+  GameState.state = 'MISS_RECOVERY';
+  GameState.recoveryUntil = performance.now() / 1000 + MISS_RECOVERY_DURATION;
+}
+
 function registerMiss(laneKey) {
   GameState.misses++;
 
+  GameState.lastMissPosition = laneKey;
   if (laneKey === 'BL' || laneKey === 'BR') {
-    GameState.lastMissPosition = laneKey;
     GameState.missAnimationTriggered = true;
   }
   if (laneKey === 'TL' || laneKey === 'TR') {
-    GameState.lastMissPosition = laneKey;
     GameState.torchMissAnimationTriggered = true;
   }
 
@@ -198,17 +237,14 @@ function registerMiss(laneKey) {
 
   if (GameState.gameMode === 'A') {
     rotatePatternAfterMiss();
-    for (const t of GameState.activeThreats) {
-      if (t.active && LANE_DEFS[t.laneId].patternGroup === GameState.patternIndex) {
-        t.active = false;
-      }
-    }
   }
 
+  // Clear active threats after miss, which matches the post-miss reset feel much better
   for (const t of GameState.activeThreats) {
     t.active = false;
   }
   cleanupInactiveThreats();
+  enterMissRecovery();
 }
 
 function checkBonus(now) {
@@ -216,6 +252,7 @@ function checkBonus(now) {
     GameState.passedBonus200 = true;
     triggerBonusCheckpoint(now);
   }
+
   if (!GameState.passedBonus500 && GameState.score >= 500) {
     GameState.passedBonus500 = true;
     triggerBonusCheckpoint(now);
@@ -227,6 +264,7 @@ function triggerBonusCheckpoint(now) {
     GameState.misses = 0;
     return;
   }
+
   GameState.chanceTime = true;
   GameState.chanceTimeUntil = now + CHANCE_TIME_DURATION;
 }
@@ -238,22 +276,27 @@ function triggerBonusCheckpoint(now) {
 function updateLaneStages() {
   for (const key of LANE_ORDER) {
     const lane = GameState.lanes[key];
-    if (lane.falling) {
-      lane.timer++;
-      if (lane.timer > FALL_DURATION) {
-        lane.stage = 0;
-        lane.timer = 0;
-        lane.falling = false;
-      }
-      continue;
-    }
+
     lane.stage = 0;
+    lane.activeStages = [];
+
+    // Tick down hit effect (overlay, does not block occupancy)
+    if (lane.hitEffectTimer > 0) {
+      lane.hitEffectTimer--;
+    }
   }
 
+  // Keep active threats visible always, even during hit effects
   for (const threat of GameState.activeThreats) {
     if (!threat.active) continue;
+    if (threat.stepIndex <= 0) continue;
+
     const lane = GameState.lanes[threat.laneId];
-    if (lane && !lane.falling) {
+    if (!lane) continue;
+
+    lane.activeStages.push(threat.stepIndex);
+
+    if (threat.stepIndex > lane.stage) {
       lane.stage = threat.stepIndex;
     }
   }
@@ -273,20 +316,26 @@ export function startGame(mode) {
 
   GameState.gameMode = mode;
   GameState.scene = 'PLAYING';
+  GameState.state = 'NORMAL';
+
   GameState.score = 0;
   GameState.misses = 0;
   GameState.gameOver = false;
 
-  GameState.patternIndex = (mode === 'A') ? Math.floor(Math.random() * 4) : 0;
+  // Deterministic opening is closer to what you observed
+  GameState.patternIndex = 0;
 
   GameState.activeThreats = [];
   GameState.nextThreatId = 1;
 
-  GameState.schedulerCursor = -1;
   GameState.spawnCycleIndex = 0;
+  GameState.spawnGateCounter = -1;
+  GameState.serviceCycleIndex = 0;
 
-  GameState.nextSpawnTime = now + 0.5;
-  GameState.nextMicrostepTime = now + 0.25;
+  GameState.lockedTickInterval = currentTickInterval(0, mode);
+  GameState.nextTickTime = now + 0.1;
+  GameState.recoveryUntil = 0;
+
   GameState.chanceTimeUntil = 0;
   GameState.chanceTime = false;
 
@@ -300,13 +349,15 @@ export function startGame(mode) {
   for (const key of LANE_ORDER) {
     const lane = GameState.lanes[key];
     lane.stage = 0;
-    lane.timer = 0;
-    if (lane.falling !== undefined) lane.falling = false;
+    lane.activeStages = [];
+    lane.hitEffectTimer = 0;
+    lane.hitEffectStage = 0;
   }
 }
 
 export function returnToTitle() {
   GameState.scene = 'TITLE';
+  GameState.state = 'NORMAL';
   GameState.missAnimationTriggered = false;
   GameState.torchMissAnimationTriggered = false;
   GameState.lastMissPosition = null;
@@ -330,28 +381,38 @@ export function attack() {
   const now = performance.now() / 1000;
   const hitPoints = GameState.chanceTime ? 5 : 2;
 
+  // Hit the front-most valid threat on that lane
+  let bestThreat = null;
+
   for (const threat of GameState.activeThreats) {
     if (!threat.active || threat.laneId !== pos) continue;
 
     if (threat.type === 'RUNNER' && (threat.stepIndex === 5 || threat.stepIndex === 6)) {
-      threat.active = false;
-      GameState.lanes[pos].falling = true;
-      GameState.lanes[pos].stage = 7;
-      GameState.lanes[pos].timer = 0;
-      GameState.score += hitPoints;
-      checkBonus(now);
-      return true;
+      if (!bestThreat || threat.stepIndex > bestThreat.stepIndex) {
+        bestThreat = threat;
+      }
     }
 
     if (threat.type === 'TORCH' && threat.stepIndex === 5) {
-      threat.active = false;
-      GameState.score += hitPoints;
-      checkBonus(now);
-      return true;
+      if (!bestThreat || threat.stepIndex > bestThreat.stepIndex) {
+        bestThreat = threat;
+      }
     }
   }
 
-  return false;
+  if (!bestThreat) return false;
+
+  bestThreat.active = false;
+
+  if (bestThreat.type === 'RUNNER') {
+    GameState.lanes[pos].hitEffectTimer = FALL_DURATION;
+    GameState.lanes[pos].hitEffectStage = 7;
+  }
+
+  GameState.score += hitPoints;
+  checkBonus(now);
+  cleanupInactiveThreats();
+  return true;
 }
 
 export function updateGame() {
@@ -362,21 +423,38 @@ export function updateGame() {
 
   const now = performance.now() / 1000;
 
-  // Chance Time expiry
   if (GameState.chanceTime && now >= GameState.chanceTimeUntil) {
     GameState.chanceTime = false;
   }
 
-  // Spawn
-  if (now >= GameState.nextSpawnTime) {
-    trySpawnFromCycle(now);
-    GameState.nextSpawnTime = now + currentSpawnInterval(GameState.score, GameState.gameMode);
+  if (GameState.state === 'MISS_RECOVERY') {
+    if (now >= GameState.recoveryUntil) {
+      GameState.state = 'NORMAL';
+      // Recalculate speed after miss recovery (board is empty)
+      GameState.lockedTickInterval = currentTickInterval(GameState.score, GameState.gameMode);
+      GameState.nextTickTime = now + GameState.lockedTickInterval;
+    }
+    updateLaneStages();
+    return;
   }
 
-  // Micro-step
-  if (now >= GameState.nextMicrostepTime) {
-    stepNextThreat(now);
-    GameState.nextMicrostepTime = now + currentMicrostepInterval(GameState.score, GameState.gameMode);
+  if (now >= GameState.nextTickTime) {
+    // Spawn with score-based gating
+    maybeSpawnOnThisTick();
+
+    // Service one lane (even if empty, to keep per-lane timing consistent)
+    const serviceCycle = getServiceCycle();
+    const laneId = serviceCycle[GameState.serviceCycleIndex];
+    GameState.serviceCycleIndex = (GameState.serviceCycleIndex + 1) % serviceCycle.length;
+    stepLane(laneId);
+
+    // Only update tick speed when board is empty (between waves)
+    const hasActiveThreats = GameState.activeThreats.some(t => t.active);
+    if (!hasActiveThreats) {
+      GameState.lockedTickInterval = currentTickInterval(GameState.score, GameState.gameMode);
+    }
+
+    GameState.nextTickTime = now + GameState.lockedTickInterval;
   }
 
   cleanupInactiveThreats();
