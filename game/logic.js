@@ -8,30 +8,54 @@ const LANE_DEFS = {
   TR: { laneId: 'TR', type: 'TORCH',  patternGroup: 3, maxStepIndex: 5, maxSimultaneous: 2 },
 };
 
-// Spawn order: sparse first half, dense second half
+// Spawn order: just lane picks, no NONE gaps.
+// The gate tables alone control density/pacing.
+// Varied lane ordering avoids obvious repetition.
+
 const SPAWN_CYCLE = [
-  { kind: 'SPAWN', laneId: 'BL' },
-  { kind: 'NONE' },
-  { kind: 'SPAWN', laneId: 'TR' },
-  { kind: 'NONE' },
-  { kind: 'SPAWN', laneId: 'BR' },
-  { kind: 'NONE' },
-  { kind: 'SPAWN', laneId: 'TL' },
-  { kind: 'NONE' },
-  { kind: 'SPAWN', laneId: 'BL' },
-  { kind: 'SPAWN', laneId: 'TR' },
-  { kind: 'SPAWN', laneId: 'BR' },
-  { kind: 'SPAWN', laneId: 'TL' },
+  'BL', 'TR', 'BR', 'TL',
+  'BL', 'BR', 'TL', 'TR',
+  'BR', 'BL', 'TR', 'TL',
+  'BL', 'BL', 'TR', 'TL',    // BL train
+  'TL', 'BR', 'BR', 'TR',    // BR train
+  'BL', 'TL', 'BR', 'TR',
+  'TR', 'BL', 'TL', 'BR',
+  'BR', 'BR', 'TL', 'BL',    // BR train
+  'TR', 'BL', 'BL', 'TL',    // BL train
+  'BR', 'TR', 'TL', 'BL',
 ];
 
-// Service order: which lane gets moved on a tick
-// This is separate from spawn order.
-// Same-lane threats move together when their lane is serviced.
+// Service order: even 4-entry cycle guarantees each lane advances
+// every 4 ticks — consistent step timing within each attack.
 const SERVICE_CYCLE_A = ['BL', 'TR', 'BR', 'TL'];
 const SERVICE_CYCLE_B = ['BL', 'TR', 'BR', 'TL'];
 
 // Single master tick interval, score-banded
 const TICK_BASE = [0.42, 0.40, 0.38, 0.36, 0.34, 0.32, 0.30, 0.28, 0.27, 0.26];
+
+// Spawn gate patterns.
+// 1 = allow spawn attempt on this tick
+// 0 = do not spawn on this tick
+
+const SPAWN_GATE_A_EARLY = [
+  1, 0, 1, 0, 0, 1, 0, 1,
+  1, 0, 0, 1, 0, 1, 0, 0,
+];
+
+const SPAWN_GATE_A_MID = [
+  1, 0, 1, 1, 0, 1, 0, 1,
+  1, 0, 1, 0, 1, 1, 0, 1,
+];
+
+const SPAWN_GATE_A_LATE = [
+  1, 1, 0, 1, 1, 0, 1, 1,
+  1, 0, 1, 1, 0, 1, 1, 1,
+];
+
+const SPAWN_GATE_B = [
+  1, 1, 0, 1, 1, 1, 0, 1,
+  1, 1, 0, 1, 1, 1, 0, 1,
+];
 
 const CHANCE_TIME_DURATION = 40.0;
 const FALL_DURATION = 30;
@@ -88,6 +112,13 @@ export const GameState = {
   torchMissAnimationTriggered: false,
   lastMissPosition: null,
 
+  laneSpawnCooldowns: {
+    TL: 0,
+    TR: 0,
+    BL: 0,
+    BR: 0,
+  },
+
   lanes: {
     TL: { type: 'torch',  stage: 0, activeStages: [], hitEffectTimer: 0, hitEffectStage: 0 },
     TR: { type: 'torch',  stage: 0, activeStages: [], hitEffectTimer: 0, hitEffectStage: 0 },
@@ -117,16 +148,38 @@ function getServiceCycle() {
 // Spawn logic
 // ---------------------------------------------------------------------------
 
+function currentSpawnGateTable() {
+  if (GameState.gameMode === 'B') {
+    return SPAWN_GATE_B;
+  }
+
+  if (GameState.score < 100) {
+    return SPAWN_GATE_A_EARLY;
+  }
+
+  if (GameState.score < 300) {
+    return SPAWN_GATE_A_MID;
+  }
+
+  return SPAWN_GATE_A_LATE;
+}
+
 function canSpawnThisTick() {
-  const score = GameState.score;
-  if (score < 100) return (GameState.spawnGateCounter % 2) === 0;
-  return true;
+  const gate = currentSpawnGateTable();
+  const idx = GameState.spawnGateCounter % gate.length;
+  return gate[idx] === 1;
 }
 
 function maybeSpawnOnThisTick() {
+  // Always advance spawn cycle every tick (keeps rhythm steady)
+  const laneId = SPAWN_CYCLE[GameState.spawnCycleIndex];
+  GameState.spawnCycleIndex = (GameState.spawnCycleIndex + 1) % SPAWN_CYCLE.length;
+
+  // Gate controls density independently
   GameState.spawnGateCounter++;
   if (!canSpawnThisTick()) return false;
-  return trySpawnFromCycle();
+
+  return trySpawnOnLane(laneId);
 }
 
 function currentLaneCapacity(laneId) {
@@ -143,16 +196,13 @@ function currentLaneCapacity(laneId) {
   return 3;
 }
 
-function trySpawnFromCycle() {
-  const intent = SPAWN_CYCLE[GameState.spawnCycleIndex];
-  GameState.spawnCycleIndex = (GameState.spawnCycleIndex + 1) % SPAWN_CYCLE.length;
-
-  if (intent.kind === 'NONE' || !intent.laneId) return false;
-
-  const lane = LANE_DEFS[intent.laneId];
+function trySpawnOnLane(laneId) {
+  const lane = LANE_DEFS[laneId];
   if (!lane) return false;
 
   if (!isPatternEnabled(lane.patternGroup)) return false;
+
+  if (GameState.laneSpawnCooldowns[laneId] > 0) return false;
 
   const activeInLane = GameState.activeThreats.filter(
     (t) => t.active && t.laneId === lane.laneId
@@ -171,6 +221,7 @@ function trySpawnFromCycle() {
   };
 
   GameState.activeThreats.push(threat);
+  GameState.laneSpawnCooldowns[lane.laneId] = lane.type === 'RUNNER' ? 0 : 3;
   return true;
 }
 
@@ -329,7 +380,7 @@ export function startGame(mode) {
   GameState.nextThreatId = 1;
 
   GameState.spawnCycleIndex = 0;
-  GameState.spawnGateCounter = -1;
+  GameState.spawnGateCounter = 0;
   GameState.serviceCycleIndex = 0;
 
   GameState.lockedTickInterval = currentTickInterval(0, mode);
@@ -347,6 +398,7 @@ export function startGame(mode) {
   GameState.lastMissPosition = null;
 
   for (const key of LANE_ORDER) {
+    GameState.laneSpawnCooldowns[key] = 0;
     const lane = GameState.lanes[key];
     lane.stage = 0;
     lane.activeStages = [];
@@ -439,6 +491,13 @@ export function updateGame() {
   }
 
   if (now >= GameState.nextTickTime) {
+    // Tick down lane spawn cooldowns
+    for (const key of LANE_ORDER) {
+      if (GameState.laneSpawnCooldowns[key] > 0) {
+        GameState.laneSpawnCooldowns[key]--;
+      }
+    }
+
     // Spawn with score-based gating
     maybeSpawnOnThisTick();
 
