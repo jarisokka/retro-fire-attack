@@ -76,6 +76,24 @@
       background-repeat: no-repeat;
     }
 
+    /* CACTUS OVERLAY - renders on top of SVG figures */
+    #lcdInnerFrame {
+      position: relative;
+    }
+
+    #cactusOverlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 400px;
+      height: 250px;
+      background-image: url('assets/bacground/background-cactus.png');
+      background-size: 400px 250px;
+      background-position: 0 0;
+      background-repeat: no-repeat;
+      pointer-events: none;
+    }
+
     /* TITLES */
     #titleTop {
       position: absolute;
@@ -225,6 +243,88 @@
       stroke-width: 0.5;
     }
 
+    /* HIT button control containers */
+    .control {
+      position: relative;
+      width: 90px;
+      height: 90px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .hit-label {
+      position: absolute;
+      font-size: 12px;
+      font-weight: bold;
+      color: #ccc;
+      letter-spacing: 2px;
+    }
+
+    .arrow {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 0 10px 30px 10px;
+    }
+
+    .control-nw .arrow {
+      border-color: transparent transparent #ccc transparent;
+      top: -13px;
+      left: -8px;
+      transform: rotate(-45deg);
+    }
+
+    .control-sw .arrow {
+      border-color: transparent transparent #ccc transparent;
+      bottom: -13px;
+      left: -8px;
+      transform: rotate(-135deg);
+    }
+
+    .control-ne .arrow {
+      border-color: transparent transparent #ccc transparent;
+      top: -13px;
+      right: -8px;
+      transform: rotate(45deg);
+    }
+
+    .control-se .arrow {
+      border-color: transparent transparent #ccc transparent;
+      bottom: -13px;
+      right: -8px;
+      transform: rotate(135deg);
+    }
+
+    .control-nw .hit-label {
+      top: 40%;
+      right: 100%;
+      transform: translateY(-50%);
+      margin-right: -3px;
+    }
+
+    .control-sw .hit-label {
+      bottom: 40%;
+      right: 100%;
+      transform: translateY(50%);
+      margin-right: -3px;
+    }
+
+    .control-ne .hit-label {
+      top: 40%;
+      left: 100%;
+      transform: translateY(-50%);
+      margin-left: -3px;
+    }
+
+    .control-se .hit-label {
+      bottom: 40%;
+      left: 100%;
+      transform: translateY(50%);
+      margin-left: -3px;
+    }
+
   </style>
 </head>
 <body>
@@ -235,8 +335,16 @@
       <div id="titleBottom">WIDE SCREEN</div>
 
       <div id="leftControls">
-        <button class="hit-button" data-key="q"></button>
-        <button class="hit-button" data-key="a"></button>
+        <div class="control control-nw">
+          <div class="hit-label">HIT</div>
+          <div class="arrow"></div>
+          <button class="hit-button" data-key="q"></button>
+        </div>
+        <div class="control control-sw">
+          <div class="hit-label">HIT</div>
+          <div class="arrow"></div>
+          <button class="hit-button" data-key="a"></button>
+        </div>
       </div>
 
       <div id="lcdWrapper">
@@ -368,7 +476,7 @@
       <!-- Score Display - 7-Segment Digits -->
       <!-- -------------------- -->
       <g id="score-display" transform="translate(100, 15) scale(0.2) skewX(-12)">
-        <!-- Digit 0 (hundreds) -->
+        <!-- Digit 0 (thousands) -->
         <g id="digit-0" transform="translate(0, 0)">
           <polygon id="digit-0-A" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" visibility="hidden" />
           <polygon id="digit-0-B" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 5)" visibility="hidden" />
@@ -378,7 +486,7 @@
           <polygon id="digit-0-F" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 5)" visibility="hidden" />
           <polygon id="digit-0-G" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 45)" visibility="hidden" />
         </g>
-        <!-- Digit 1 (tens) -->
+        <!-- Digit 1 (hundreds) -->
         <g id="digit-1" transform="translate(80, 0)">
           <polygon id="digit-1-A" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" visibility="hidden" />
           <polygon id="digit-1-B" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 5)" visibility="hidden" />
@@ -388,7 +496,7 @@
           <polygon id="digit-1-F" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 5)" visibility="hidden" />
           <polygon id="digit-1-G" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 45)" visibility="hidden" />
         </g>
-        <!-- Digit 2 (ones) -->
+        <!-- Digit 2 (tens) -->
         <g id="digit-2" transform="translate(160, 0)">
           <polygon id="digit-2-A" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" visibility="hidden" />
           <polygon id="digit-2-B" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 5)" visibility="hidden" />
@@ -398,8 +506,19 @@
           <polygon id="digit-2-F" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 5)" visibility="hidden" />
           <polygon id="digit-2-G" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 45)" visibility="hidden" />
         </g>
+        <!-- Digit 3 (ones) -->
+        <g id="digit-3" transform="translate(240, 0)">
+          <polygon id="digit-3-A" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" visibility="hidden" />
+          <polygon id="digit-3-B" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 5)" visibility="hidden" />
+          <polygon id="digit-3-C" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(40, 55)" visibility="hidden" />
+          <polygon id="digit-3-D" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 90)" visibility="hidden" />
+          <polygon id="digit-3-E" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 55)" visibility="hidden" />
+          <polygon id="digit-3-F" class="segment" points="0,5 10,5 10,35 5,40 0,35" transform="translate(0, 5)" visibility="hidden" />
+          <polygon id="digit-3-G" class="segment" points="5,0 35,0 40,5 35,10 5,10 0,5" transform="translate(0, 45)" visibility="hidden" />
+        </g>
       </g>
     </svg>
+        <div id="cactusOverlay"></div>
         </div>
       </div>
       </div>
@@ -409,8 +528,16 @@
           <button class="mode-switch selected" id="gameModeA" data-mode="A">GAME A</button>
           <button class="mode-switch" id="gameModeB" data-mode="B">GAME B</button>
         </div>
-        <button class="hit-button" data-key="e"></button>
-        <button class="hit-button" data-key="d"></button>
+        <div class="control control-ne">
+          <div class="hit-label">HIT</div>
+          <div class="arrow"></div>
+          <button class="hit-button" data-key="e"></button>
+        </div>
+        <div class="control control-se">
+          <div class="hit-label">HIT</div>
+          <div class="arrow"></div>
+          <button class="hit-button" data-key="d"></button>
+        </div>
       </div>
 
     </div>

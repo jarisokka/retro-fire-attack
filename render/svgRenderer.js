@@ -1009,17 +1009,16 @@ const SEGMENTS = {
 };
 
 export function drawScore(score) {
-  const padded = Math.min(score, 999).toString().padStart(3, "0");
+  const displayScore = score % 10000;
+  const padded = displayScore.toString().padStart(4, "0");
   
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const digitGroup = document.getElementById(`digit-${i}`);
     
-    // Hide digits that aren't needed yet
-    if ((i === 0 && score < 100) || (i === 1 && score < 10)) {
+    // Hide leading zeros
+    if ((i === 0 && displayScore < 1000) || (i === 1 && displayScore < 100) || (i === 2 && displayScore < 10)) {
       if (digitGroup) {
         digitGroup.setAttribute('visibility', 'hidden');
-        // Explicitly clear each segment so child visibility="visible" attributes
-        // don't bleed through the hidden parent group in SVG.
         ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach(seg => {
           const el = document.getElementById(`digit-${i}-${seg}`);
           if (el) el.setAttribute('visibility', 'hidden');

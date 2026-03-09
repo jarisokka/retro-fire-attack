@@ -14,12 +14,12 @@ const SEGMENTS = {
 };
 
 export function drawScore(ctx, score) {
-  const padded = Math.min(score, 999)
+  const padded = (score % 10000)
     .toString()
-    .padStart(3, "0");
+    .padStart(4, "0");
 
-  for (let i = 0; i < 3; i++) {
-    drawDigit(ctx, padded[i], 220 + i * 28, 22);
+  for (let i = 0; i < 4; i++) {
+    drawDigit(ctx, padded[i], 192 + i * 28, 22);
   }
 }
 

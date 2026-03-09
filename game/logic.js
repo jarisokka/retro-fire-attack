@@ -137,7 +137,7 @@ function isPatternEnabled(patternGroup) {
 }
 
 function rotatePatternAfterMiss() {
-  GameState.patternIndex = (GameState.patternIndex + 1) % 4;
+  GameState.patternIndex = Math.floor(Math.random() * 4);
 }
 
 function getServiceCycle() {
@@ -373,8 +373,7 @@ export function startGame(mode) {
   GameState.misses = 0;
   GameState.gameOver = false;
 
-  // Deterministic opening is closer to what you observed
-  GameState.patternIndex = 0;
+  GameState.patternIndex = Math.floor(Math.random() * 4);
 
   GameState.activeThreats = [];
   GameState.nextThreatId = 1;
@@ -418,6 +417,7 @@ export function returnToTitle() {
 export function setGameMode(mode) {
   if (mode === 'A' || mode === 'B') {
     GameState.gameMode = mode;
+    GameState.score = 0;
   }
 }
 
@@ -461,7 +461,7 @@ export function attack() {
     GameState.lanes[pos].hitEffectStage = 7;
   }
 
-  GameState.score += hitPoints;
+  GameState.score = (GameState.score + hitPoints) % 10000;
   checkBonus(now);
   cleanupInactiveThreats();
   return true;
