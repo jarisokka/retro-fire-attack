@@ -87,7 +87,7 @@ export const GameState = {
   gameOver: false,
 
   // Main play flow
-  state: 'NORMAL', // NORMAL | MISS_RECOVERY
+  state: 'NORMAL', // NORMAL | MISS_RECOVERY | BONUS_PLAYING
 
   patternIndex: 0,
 
@@ -310,14 +310,23 @@ function checkBonus(now) {
   }
 }
 
+import { Sound } from '../audio/sound.js';
+
 function triggerBonusCheckpoint(now) {
   if (GameState.misses > 0) {
     GameState.misses = 0;
     return;
   }
 
-  GameState.chanceTime = true;
-  GameState.chanceTimeUntil = now + CHANCE_TIME_DURATION;
+  // Freeze game and play bonus sound
+  GameState.state = 'BONUS_PLAYING';
+  Sound.bonusMusic().then(() => {
+    if (GameState.state !== 'BONUS_PLAYING') return; // game was reset
+    GameState.chanceTime = true;
+    GameState.chanceTimeUntil = performance.now() / 1000 + CHANCE_TIME_DURATION;
+    GameState.state = 'NORMAL';
+    GameState.nextTickTime = performance.now() / 1000 + GameState.lockedTickInterval;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -477,6 +486,11 @@ export function updateGame() {
 
   if (GameState.chanceTime && now >= GameState.chanceTimeUntil) {
     GameState.chanceTime = false;
+  }
+
+  if (GameState.state === 'BONUS_PLAYING') {
+    updateLaneStages();
+    return;
   }
 
   if (GameState.state === 'MISS_RECOVERY') {

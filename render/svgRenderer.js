@@ -1069,8 +1069,16 @@ export function render(gameState) {
     // Draw fires
     drawFires(gameState.misses);
     
-    // Draw score
+    // Draw score (blink during chance time)
     drawScore(gameState.score);
+    if (gameState.chanceTime) {
+      const visible = Math.floor(performance.now() / 250) % 2 === 0;
+      const scoreDisplay = document.getElementById('score-display');
+      if (scoreDisplay) scoreDisplay.style.opacity = visible ? '1' : '0';
+    } else {
+      const scoreDisplay = document.getElementById('score-display');
+      if (scoreDisplay) scoreDisplay.style.opacity = '1';
+    }
     
     // Check for game over
     if (gameState.gameOver) {

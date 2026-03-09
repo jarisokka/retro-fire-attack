@@ -17,6 +17,7 @@ const audioFiles = {
   burn:        createAudio("audio/burn.mp3", 0.5),
   flyingTorch: createAudio("audio/flying-torch.mp3", 0.5),
   runner:      createAudio("audio/runner.mp3", 0.5),
+  bonus:       createAudio("audio/bonus.mp3", 0.5),
 };
 
 // ---- Web Audio beep ----
@@ -41,6 +42,15 @@ function playWithOffset(audio, offset = 0) {
   audio.play().catch(() => {});
 }
 
+// ---- Promise-based playback (waits for sound to finish) ----
+function playAndWait(audio, offset = 0) {
+  return new Promise(resolve => {
+    audio.currentTime = offset;
+    audio.onended = () => resolve();
+    audio.play().catch(() => resolve());
+  });
+}
+
 // ---- Sound Events ----
 export const Sound = {
   hit:         () => playWithOffset(audioFiles.hit),
@@ -48,6 +58,7 @@ export const Sound = {
   flyingTorch: () => playWithOffset(audioFiles.flyingTorch),
   runner:      () => playWithOffset(audioFiles.runner),
   bonus:       () => beep(1000, 0.12),
+  bonusMusic:  () => playAndWait(audioFiles.bonus),
 };
 
 // ---- iOS / autoplay unlock ----
