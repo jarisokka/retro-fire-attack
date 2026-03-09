@@ -1,86 +1,124 @@
+// ---- Deferred AudioContext (created on first user gesture) ----
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
-const audioCtx = new AudioCtx();
+let audioCtx = null;
 
-// ---- Pre-create audio objects ----
-// iOS Safari requires HTMLAudio elements to be played within a user gesture.
-// Pre-creating them and doing a silent play inside unlockAudio() registers
-// the OS-level authorization so subsequent .play() calls work freely.
-function createAudio(src, volume) {
-  const audio = new Audio(src);
-  audio.volume = volume;
-  audio.preload = "auto";
-  return audio;
+function getContext() {
+  if (!audioCtx) {
+    audioCtx = new AudioCtx();
+  }
+  return audioCtx;
 }
 
-const audioFiles = {
-  hit:         createAudio("audio/hit.mp3", 0.5),
-  burn:        createAudio("audio/burn.mp3", 0.5),
-  flyingTorch: createAudio("audio/flying-torch.mp3", 0.5),
-  runner:      createAudio("audio/runner.mp3", 0.5),
-  bonus:       createAudio("audio/bonus.mp3", 0.5),
+// ---- Web Audio API buffer loading ----
+const buffers = {};
+const SOUND_FILES = {
+  hit:         'audio/hit.mp3',
+  burn:        'audio/burn.mp3',
+  flyingTorch: 'audio/flying-torch.mp3',
+  runner:      'audio/runner.mp3',
+  bonus:       'audio/bonus.mp3',
 };
+
+const VOLUMES = {
+  hit: 0.5,
+  burn: 0.5,
+  flyingTorch: 0.5,
+  runner: 0.5,
+  bonus: 0.5,
+};
+
+async function loadBuffer(name, url) {
+  try {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    buffers[name] = await getContext().decodeAudioData(arrayBuffer);
+  } catch (e) {
+    // Silently fail — sound just won't play
+  }
+}
+
+function loadAllBuffers() {
+  return Promise.all(
+    Object.entries(SOUND_FILES).map(([name, url]) => loadBuffer(name, url))
+  );
+}
+
+// ---- Play a decoded buffer (creates fresh source each time) ----
+function playBuffer(name) {
+  const ctx = getContext();
+  const buffer = buffers[name];
+  if (!buffer || ctx.state === 'suspended') return;
+
+  const source = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  source.buffer = buffer;
+  gain.gain.value = VOLUMES[name] || 0.5;
+  source.connect(gain);
+  gain.connect(ctx.destination);
+  source.start();
+}
+
+// ---- Play buffer and wait for it to finish ----
+function playBufferAndWait(name) {
+  const ctx = getContext();
+  const buffer = buffers[name];
+  if (!buffer || ctx.state === 'suspended') return Promise.resolve();
+
+  return new Promise(resolve => {
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    gain.gain.value = VOLUMES[name] || 0.5;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    source.onended = () => resolve();
+    source.start();
+  });
+}
 
 // ---- Web Audio beep ----
 function beep(freq, duration = 0.05, volume = 0.15) {
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
+  const ctx = getContext();
+  if (ctx.state === 'suspended') return;
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
 
   osc.type = "square";
   osc.frequency.value = freq;
   gain.gain.value = volume;
 
   osc.connect(gain);
-  gain.connect(audioCtx.destination);
+  gain.connect(ctx.destination);
 
   osc.start();
-  osc.stop(audioCtx.currentTime + duration);
-}
-
-// ---- Playback helper ----
-function playWithOffset(audio, offset = 0) {
-  audio.currentTime = offset;
-  audio.play().catch(() => {});
-}
-
-// ---- Promise-based playback (waits for sound to finish) ----
-function playAndWait(audio, offset = 0) {
-  return new Promise(resolve => {
-    audio.currentTime = offset;
-    audio.onended = () => resolve();
-    audio.play().catch(() => resolve());
-  });
+  osc.stop(ctx.currentTime + duration);
 }
 
 // ---- Sound Events ----
 export const Sound = {
-  hit:         () => playWithOffset(audioFiles.hit),
-  burn:        () => playWithOffset(audioFiles.burn),
-  flyingTorch: () => playWithOffset(audioFiles.flyingTorch),
-  runner:      () => playWithOffset(audioFiles.runner),
+  hit:         () => playBuffer('hit'),
+  burn:        () => playBuffer('burn'),
+  flyingTorch: () => playBuffer('flyingTorch'),
+  runner:      () => playBuffer('runner'),
   bonus:       () => beep(1000, 0.12),
-  bonusMusic:  () => playAndWait(audioFiles.bonus),
+  bonusMusic:  () => playBufferAndWait('bonus'),
 };
 
-// ---- iOS / autoplay unlock ----
-// Must be called from a real user-gesture handler (touchstart, click, keydown).
-// Silently plays then immediately pauses every HTMLAudio element so iOS
-// registers each one as "user-activated", enabling later .play() calls.
+// ---- Audio unlock (call from user gesture: touchstart, click, keydown) ----
 let audioUnlocked = false;
 
 export function unlockAudio() {
   if (audioUnlocked) return;
   audioUnlocked = true;
 
-  // Resume Web Audio API context (suspended by iOS on creation)
-  if (audioCtx.state === "suspended") {
-    audioCtx.resume();
+  const ctx = getContext();
+
+  // Resume suspended context (required on iOS/mobile)
+  if (ctx.state === 'suspended') {
+    ctx.resume();
   }
 
-  // Touch-authorize every HTMLAudio element
-  Object.values(audioFiles).forEach(audio => {
-    audio.play().then(() => {
-      audio.pause();
-      audio.currentTime = 0;
-    }).catch(() => {});
-  });
+  // Load all sound buffers
+  loadAllBuffers();
 }
