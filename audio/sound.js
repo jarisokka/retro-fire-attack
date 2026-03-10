@@ -4,7 +4,7 @@ let audioCtx = null;
 let buffersLoaded = false;
 
 function getContext() {
-  if (!audioCtx) {
+  if (!audioCtx || audioCtx.state === 'closed') {
     audioCtx = new AudioCtx();
   }
   return audioCtx;
@@ -45,10 +45,10 @@ async function loadAllBuffers() {
   buffersLoaded = true;
 }
 
-// ---- Ensure context is running (auto-resume if suspended) ----
+// ---- Ensure context is running (auto-resume if suspended/interrupted) ----
 function ensureRunning() {
   const ctx = getContext();
-  if (ctx.state === 'suspended') {
+  if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
     ctx.resume();
   }
   return ctx;
@@ -116,25 +116,36 @@ export const Sound = {
 };
 
 // ---- Audio unlock (call from user gesture: touchstart, click, keydown) ----
-let audioUnlocked = false;
-
 export function unlockAudio() {
-  if (audioUnlocked) return;
-  audioUnlocked = true;
-
   const ctx = getContext();
 
-  // Resume suspended context (required on iOS/mobile), then load buffers
-  if (ctx.state === 'suspended') {
-    ctx.resume().then(() => loadAllBuffers());
-  } else {
+  // Always try to resume — iOS can re-suspend anytime
+  if (ctx.state !== 'running') {
+    ctx.resume();
+  }
+
+  // Load buffers only once
+  if (!buffersLoaded) {
+    buffersLoaded = true;  // set early to prevent duplicate loads
     loadAllBuffers();
   }
 
-  // Play a silent buffer to fully unlock iOS audio pipeline
-  const silentBuffer = ctx.createBuffer(1, 1, 22050);
-  const source = ctx.createBufferSource();
-  source.buffer = silentBuffer;
-  source.connect(ctx.destination);
-  source.start();
+  // Play a silent buffer to fully unlock iOS audio pipeline (only first time)
+  if (!unlockAudio._silentPlayed) {
+    unlockAudio._silentPlayed = true;
+    const silentBuffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = silentBuffer;
+    source.connect(ctx.destination);
+    source.start();
+  }
 }
+
+// ---- Resume audio when returning to the tab/app ----
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && audioCtx) {
+    if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+      audioCtx.resume();
+    }
+  }
+});
