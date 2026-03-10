@@ -1,6 +1,7 @@
 // ---- Deferred AudioContext (created on first user gesture) ----
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
+let buffersLoaded = false;
 
 function getContext() {
   if (!audioCtx) {
@@ -37,17 +38,27 @@ async function loadBuffer(name, url) {
   }
 }
 
-function loadAllBuffers() {
-  return Promise.all(
+async function loadAllBuffers() {
+  await Promise.all(
     Object.entries(SOUND_FILES).map(([name, url]) => loadBuffer(name, url))
   );
+  buffersLoaded = true;
+}
+
+// ---- Ensure context is running (auto-resume if suspended) ----
+function ensureRunning() {
+  const ctx = getContext();
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+  return ctx;
 }
 
 // ---- Play a decoded buffer (creates fresh source each time) ----
 function playBuffer(name) {
-  const ctx = getContext();
+  const ctx = ensureRunning();
   const buffer = buffers[name];
-  if (!buffer || ctx.state === 'suspended') return;
+  if (!buffer) return;
 
   const source = ctx.createBufferSource();
   const gain = ctx.createGain();
@@ -60,9 +71,9 @@ function playBuffer(name) {
 
 // ---- Play buffer and wait for it to finish ----
 function playBufferAndWait(name) {
-  const ctx = getContext();
+  const ctx = ensureRunning();
   const buffer = buffers[name];
-  if (!buffer || ctx.state === 'suspended') return Promise.resolve();
+  if (!buffer) return Promise.resolve();
 
   return new Promise(resolve => {
     const source = ctx.createBufferSource();
@@ -78,8 +89,7 @@ function playBufferAndWait(name) {
 
 // ---- Web Audio beep ----
 function beep(freq, duration = 0.05, volume = 0.15) {
-  const ctx = getContext();
-  if (ctx.state === 'suspended') return;
+  const ctx = ensureRunning();
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -114,11 +124,17 @@ export function unlockAudio() {
 
   const ctx = getContext();
 
-  // Resume suspended context (required on iOS/mobile)
+  // Resume suspended context (required on iOS/mobile), then load buffers
   if (ctx.state === 'suspended') {
-    ctx.resume();
+    ctx.resume().then(() => loadAllBuffers());
+  } else {
+    loadAllBuffers();
   }
 
-  // Load all sound buffers
-  loadAllBuffers();
+  // Play a silent buffer to fully unlock iOS audio pipeline
+  const silentBuffer = ctx.createBuffer(1, 1, 22050);
+  const source = ctx.createBufferSource();
+  source.buffer = silentBuffer;
+  source.connect(ctx.destination);
+  source.start();
 }
