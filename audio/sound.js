@@ -1,7 +1,7 @@
 // ---- Deferred AudioContext (created on first user gesture) ----
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
-let buffersLoaded = false;
+let buffersReadyPromise = null;
 
 function getContext() {
   if (!audioCtx || audioCtx.state === 'closed') {
@@ -42,7 +42,6 @@ async function loadAllBuffers() {
   await Promise.all(
     Object.entries(SOUND_FILES).map(([name, url]) => loadBuffer(name, url))
   );
-  buffersLoaded = true;
 }
 
 // ---- Ensure context is running (auto-resume if suspended/interrupted) ----
@@ -55,7 +54,9 @@ function ensureRunning() {
 }
 
 // ---- Play a decoded buffer (creates fresh source each time) ----
-function playBuffer(name) {
+async function playBuffer(name) {
+  if (buffersReadyPromise) await buffersReadyPromise;
+
   const ctx = ensureRunning();
   const buffer = buffers[name];
   if (!buffer) return;
@@ -70,10 +71,12 @@ function playBuffer(name) {
 }
 
 // ---- Play buffer and wait for it to finish ----
-function playBufferAndWait(name) {
+async function playBufferAndWait(name) {
+  if (buffersReadyPromise) await buffersReadyPromise;
+
   const ctx = ensureRunning();
   const buffer = buffers[name];
-  if (!buffer) return Promise.resolve();
+  if (!buffer) return;
 
   return new Promise(resolve => {
     const source = ctx.createBufferSource();
@@ -124,13 +127,9 @@ export function unlockAudio() {
     ctx.resume();
   }
 
-  // Load buffers only once
-  if (!buffersLoaded) {
-    buffersLoaded = true;  // set early to prevent duplicate loads
-    loadAllBuffers();
-  }
-
   // Play a silent buffer to fully unlock iOS audio pipeline (only first time)
+  // Must happen BEFORE loading buffers — Safari can fail decodeAudioData
+  // if the context hasn't been "activated" by playing something first
   if (!unlockAudio._silentPlayed) {
     unlockAudio._silentPlayed = true;
     const silentBuffer = ctx.createBuffer(1, 1, 22050);
@@ -138,6 +137,11 @@ export function unlockAudio() {
     source.buffer = silentBuffer;
     source.connect(ctx.destination);
     source.start();
+  }
+
+  // Load buffers only once (tracked by promise so playBuffer can await)
+  if (!buffersReadyPromise) {
+    buffersReadyPromise = loadAllBuffers();
   }
 }
 
