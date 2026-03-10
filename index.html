@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Fire Attack (Retro)</title>
   <link rel="icon" href="data:," />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
 
   <style>
     :root {
@@ -19,6 +19,8 @@
       align-items: center;
       height: 100dvh;
       font-family: Arial, sans-serif;
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
     }
 
     /* OUTER ORANGE SHELL */
@@ -229,13 +231,8 @@
         padding: 5px 10px;
         border-radius: 12px;
 
-        /* Scale to always fit screen */
-        transform: scale(
-          min(
-            (100vw / 1100),
-            (100vh / 650)
-          )
-        );
+        /* Scale to always fit screen - value set by JS */
+        transform: scale(var(--console-scale, 1));
       }
 
       /* So borders stay visible on small screens */
@@ -692,6 +689,15 @@
           consoleElement.style.setProperty('--portrait-scale', scale.toString());
         } else {
           consoleElement.style.removeProperty('--portrait-scale');
+
+          if (baseConsoleWidth && baseConsoleHeight) {
+            const availableWidth = Math.max(window.innerWidth - PORTRAIT_SAFE_MARGIN, 320);
+            const availableHeight = Math.max(window.innerHeight - PORTRAIT_SAFE_MARGIN, 320);
+            const widthConstraint = availableWidth / baseConsoleWidth;
+            const heightConstraint = availableHeight / baseConsoleHeight;
+            const scale = Math.min(widthConstraint, heightConstraint, 1);
+            consoleElement.style.setProperty('--console-scale', scale.toString());
+          }
         }
       }
 
